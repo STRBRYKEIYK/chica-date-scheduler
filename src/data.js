@@ -50,9 +50,7 @@ export const CATEGORIES = [
     vibe: "Private, cozy, uninterrupted time together.",
     glow: "#b38cff",
     places: [
-      { id: "ava", name: "Hotel Ava", area: "Pasay or Malate", highlights: ["Movie marathon", "Ordering room service", "Thematic rooms"] },
-      { id: "luljettas", name: "Luljetta's Hanging Gardens Spa", area: "Antipolo", highlights: ["Infinity pool", "Couples massage", "Scenic mountain views"] },
-      { id: "privato", name: "Privato Hotel", area: "Ortigas / Quezon City", highlights: ["City skyline views", "Roof deck pool", "Quiet luxury"] }
+      { id: "ava", name: "Hotel Ava", area: "Pasay or Malate", highlights: ["Movie marathon", "Ordering room service", "Thematic rooms"] }
     ]
   }
 ];

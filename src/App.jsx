@@ -171,7 +171,7 @@ function CategoryStep({ sel, onPick }) {
             <span className="mt-2 block font-display text-2xl font-bold italic leading-snug">{c.title}</span>
             <span className="mt-2 block max-w-[28ch] text-base text-cream/85">{c.vibe}</span>
             <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-sun-amber">
-              {c.places.length} places + your own pick <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              {c.places.length} {c.places.length === 1 ? "place" : "places"} + your own pick <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </span>
           </motion.button>
         ))}
