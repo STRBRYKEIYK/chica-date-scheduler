@@ -57,7 +57,7 @@ Five functions of the 12 the Hobby plan allows. Files starting with `_` are help
 
 ## Features
 
-- **Plan:** three steps, each with a little panel of toggles and a big panel of choices (on a phone the toggles sit on top and can be folded). Place: Surprise me, vibe, budget and distance toggles filter the places. Day and time: quick days (Bukas, Sabado, Linggo) and time-of-day toggles. Her say: idea chips for the note. The ticket shows a rough budget, a what-to-bring checklist, a map and directions.
+- **Plan:** four steps, each with a little panel of toggles and a big panel of choices (on a phone the toggles sit on top and can be folded). Vibe: pick one of six, or Surprise me, with budget and distance toggles. Place: the places of that vibe (or her own). Day and time: quick days (Bukas, Sabado, Linggo) and time-of-day toggles. Her say: idea chips for the note. The ticket shows a rough budget, a what-to-bring checklist, a map and directions.
 - **Our dates:** see every saved date with a countdown, change it (day, time, place), cancel it, or save it to a calendar.
 - **Chico mode:** open `https://chica.keicodes.dev/date/?as=chico` once on his phone. He plans, Chica gets the plan to answer (yes, change, or can't), and Keith's channels hear what she answers.
 - **Library calendar:** tap a day for its details, the countdown to the next date or special day, and a memory (one photo and a few words) after a date.

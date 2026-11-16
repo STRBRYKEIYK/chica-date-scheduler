@@ -5,10 +5,10 @@ import { PHOTOS } from "./photos.js";
 import { googleCalendarUrl, icsFile, mapsUrl, directionsUrl } from "./calendar.js";
 import { acceptDate, cancelDate, entryFrom, forgetPlanKey, getRole, isCancelled, loadDates, newPlanId, planKey, saveDate, sendAlert, slot, statusOf } from "./saved.js";
 
-const STEPS = ["Place", "Date & time", "Your say"];
+const STEPS = ["Vibe", "Place", "Date & time", "Your say"];
 const EMPTY = { catId: "", catTitle: "", place: "", area: "", pid: "", customPlace: false, date: "", time: "", note: "" };
 const LABEL = "text-[10px] font-bold uppercase tracking-[0.28em]";
-const NO_FILTER = { budget: 0, zone: "", vibe: "" };
+const NO_FILTER = { budget: 0, zone: "" };
 
 /* ---------- helpers ---------- */
 const parseISO = (iso) => {
@@ -275,7 +275,9 @@ function SidePanel({ nav, label = "Mga toggle", pinned, peek, toggleLabel = "Ayu
   const [open, setOpen] = useState(startOpen);
   const bodyId = useId();
   const { sel, step } = nav;
-  const rows = [["Lugar", sel.place, 1], ["Araw", sel.date ? shortDate(sel.date) : "", 2], ["Oras", sel.time, 2]];
+  const cat = CATEGORIES.find((c) => c.id === sel.catId);
+  const rows = [["Vibe", cat ? cat.short : sel.catTitle, 1], ["Lugar", sel.place, 2], ["Araw", sel.date ? shortDate(sel.date) : "", 3], ["Oras", sel.time, 3]];
+  const showFoot = !nav.noNext || rows.some(([, v]) => v);
   return (
     <aside
       aria-label="Mga toggle"
@@ -298,7 +300,7 @@ function SidePanel({ nav, label = "Mga toggle", pinned, peek, toggleLabel = "Ayu
       {children && <div id={bodyId} className={`${open ? "block" : "hidden"} lg:block`}>{children}</div>}
       </div>
 
-      <div className="mt-4 hidden shrink-0 border-t border-paper/20 pt-4 lg:block">
+      {showFoot && <div className="mt-4 hidden shrink-0 border-t border-paper/20 pt-4 lg:block">
         {rows.some(([, v]) => v) && (
           <>
             <p className={`${LABEL} text-paper/55`}>Date natin</p>
@@ -307,7 +309,7 @@ function SidePanel({ nav, label = "Mga toggle", pinned, peek, toggleLabel = "Ayu
                 <div key={k} className="grid grid-cols-[52px_minmax(0,1fr)] items-baseline gap-2 border-b border-paper/15 py-1">
                   <dt className={`${LABEL} text-red-lt`}>{k}</dt>
                   <dd className="min-w-0 break-words text-[14px] font-bold leading-snug">
-                    {to < step ? (
+                    {to !== step ? (
                       <button type="button" onClick={() => nav.jump(to)} className="text-left underline decoration-paper/30 underline-offset-4 hover:decoration-red-lt">{v}</button>
                     ) : v}
                   </dd>
@@ -316,14 +318,18 @@ function SidePanel({ nav, label = "Mga toggle", pinned, peek, toggleLabel = "Ayu
             </dl>
           </>
         )}
-        <p className="min-h-4 text-[11px] font-bold uppercase leading-snug tracking-[0.14em] text-paper/60" role="status">{nav.hint}</p>
-        <button
-          type="button" onClick={nav.next} disabled={!nav.canNext}
-          className="mt-2 inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-full bg-red px-6 text-[12px] font-bold uppercase tracking-[0.2em] text-white transition-opacity disabled:opacity-30 lg:min-h-12"
-        >
-          {nav.nextLabel} <Arrow />
-        </button>
-      </div>
+        {!nav.noNext && (
+          <>
+            <p className="min-h-4 text-[11px] font-bold uppercase leading-snug tracking-[0.14em] text-paper/60" role="status">{nav.hint}</p>
+            <button
+              type="button" onClick={nav.next} disabled={!nav.canNext}
+              className="mt-2 inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-full bg-red px-6 text-[12px] font-bold uppercase tracking-[0.2em] text-white transition-opacity disabled:opacity-30 lg:min-h-12"
+            >
+              {nav.nextLabel} <Arrow />
+            </button>
+          </>
+        )}
+      </div>}
     </aside>
   );
 }
@@ -342,6 +348,7 @@ function Panel({ head, aside: right, children }) {
 }
 
 function BottomBar({ nav }) {
+  if (nav.noNext) return null;
   const line = [nav.sel.place, nav.sel.date && shortDate(nav.sel.date), nav.sel.time].filter(Boolean).join(" · ");
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper px-6 pb-6 pt-3 lg:hidden">
@@ -361,7 +368,7 @@ function BottomBar({ nav }) {
 function Stage({ nav, title, aside, children }) {
   return (
     <div className="min-h-dvh bg-paper text-ink">
-      <div className="mx-auto w-full max-w-xl px-6 pb-44 pt-4 lg:max-w-6xl lg:pb-16">
+      <div className={`mx-auto w-full max-w-xl px-6 pt-4 lg:max-w-6xl lg:pb-16 ${nav.noNext ? "pb-16" : "pb-44"}`}>
         <Header step={nav.step} onBack={nav.back} />
         <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-x-8 lg:gap-y-0">
           <div className="min-w-0 lg:col-start-2 lg:row-start-1">{title}</div>
@@ -375,12 +382,12 @@ function Stage({ nav, title, aside, children }) {
 }
 
 /* a ticket-style card: dashed stub on the left, content on the right */
-function TicketRow({ id, mark, label, active, onClick, children, delay = 0 }) {
+function TicketRow({ id, mark, label, active, onClick, children, delay = 0, disabled = false }) {
   return (
     <motion.button
-      id={id} type="button"
-      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}
-      whileTap={{ scale: 0.985 }} onClick={onClick} aria-pressed={active}
+      id={id} type="button" disabled={disabled}
+      initial={{ opacity: 0, y: 12 }} animate={{ opacity: disabled ? 0.4 : 1, y: 0 }} transition={{ delay }}
+      whileTap={disabled ? undefined : { scale: 0.985 }} onClick={onClick} aria-pressed={active}
       className={`relative grid w-full grid-cols-[60px_1fr] overflow-hidden rounded-lg border-[1.5px] bg-card text-left transition-colors ${active ? "border-red" : "border-ink"}`}
     >
       <span className={`flex flex-col items-center justify-between gap-3 border-r-2 border-dashed px-1 py-4 ${active ? "border-red" : "border-ink"}`}>
@@ -395,26 +402,87 @@ function TicketRow({ id, mark, label, active, onClick, children, delay = 0 }) {
   );
 }
 
-/* ---------- step 1: the place ---------- */
+/* ---------- steps 1 and 2: the vibe, then the place ---------- */
 const matchesBZ = (f) => (p) => (!f.budget || p.budget <= f.budget) && (!f.zone || p.zone === f.zone);
-const matchesAll = (f) => (p) => matchesBZ(f)(p) && (!f.vibe || p.catId === f.vibe);
+
+function SurpriseButton({ onClick, disabled }) {
+  return (
+    <button
+      type="button" onClick={onClick} disabled={disabled}
+      className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-full border-[1.5px] border-dashed border-paper/70 px-6 text-[12px] font-bold uppercase tracking-[0.2em] text-paper transition-colors hover:border-red-lt disabled:opacity-40 lg:min-h-12"
+    >
+      <Dice className="h-5 w-5" /> Surprise me
+    </button>
+  );
+}
+
+// the same budget and distance toggles on the vibe step and the place step
+function filterPeek(filters) {
+  return `${filters.budget ? `Hanggang ${TIERS[filters.budget].sign}` : "Kahit magkano"} · ${filters.zone ? ZONES[filters.zone] : "Kahit saan"}`;
+}
+function FilterGroups({ filters, setFilters, shown, total }) {
+  const active = !!(filters.budget || filters.zone);
+  return (
+    <>
+      <Group label="Budget para sa dalawa">
+        <Chip dark on={!filters.budget} onClick={() => setFilters({ ...filters, budget: 0 })}>Kahit magkano</Chip>
+        {[1, 2].map((t) => (
+          <Chip key={t} dark title={`${TIERS[t].label}: ${TIERS[t].range}`} on={filters.budget === t} onClick={() => setFilters({ ...filters, budget: filters.budget === t ? 0 : t })}>Hanggang {TIERS[t].sign}</Chip>
+        ))}
+      </Group>
+      <Group label="Gaano kalayo">
+        <Chip dark on={!filters.zone} onClick={() => setFilters({ ...filters, zone: "" })}>Kahit saan</Chip>
+        {Object.entries(ZONES).map(([k, text]) => (
+          <Chip key={k} dark on={filters.zone === k} onClick={() => setFilters({ ...filters, zone: filters.zone === k ? "" : k })}>{text}</Chip>
+        ))}
+      </Group>
+      <p className="mt-4 text-[11px] font-medium uppercase leading-relaxed tracking-wide text-paper/70 lg:mt-3" role="status">
+        {active ? `${shown} sa ${total} lugar ang bagay.` : `${total} lugar sa kabuuan.`}
+        {active && <button type="button" onClick={() => setFilters(NO_FILTER)} className="ml-2 font-bold text-red-lt underline underline-offset-4">Alisin</button>}
+      </p>
+    </>
+  );
+}
+
+function CategoryStep({ nav, sel, onPick, filters, setFilters, onSurprise }) {
+  const ok = matchesBZ(filters);
+  const total = ALL_PLACES.length;
+  const shown = ALL_PLACES.filter(ok).length;
+  return (
+    <Stage
+      nav={nav}
+      title={<Title eyebrow="Step one" sub="What kind of date are we feeling?" photo={PHOTOS.b1} tilt={4} className="mb-2 lg:mb-6">Pick the vibe</Title>}
+      aside={
+        <SidePanel nav={nav} pinned={<SurpriseButton onClick={onSurprise} disabled={!shown} />} peek={filterPeek(filters)} toggleLabel="Budget at layo" startOpen={false}>
+          <FilterGroups filters={filters} setFilters={setFilters} shown={shown} total={total} />
+        </SidePanel>
+      }
+    >
+      <Panel head="Mga vibe" aside={`${CATEGORIES.length}`}>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {CATEGORIES.map((c, i) => {
+            const n = ALL_PLACES.filter((p) => p.catId === c.id && ok(p)).length;
+            return (
+              <TicketRow key={c.id} id={`cat-${c.id}`} mark={i + 1} label="Vibe" active={sel.catId === c.id} onClick={() => onPick(c)} delay={0.05 * i} disabled={!n}>
+                <span className="block pr-6 font-display text-[1.3rem] font-black leading-tight">{c.title}</span>
+                <span className="mt-1.5 block text-[12px] font-medium uppercase leading-relaxed tracking-wide text-mute">{c.vibe}</span>
+                <span className={`${LABEL} mt-3 block text-red`}>
+                  {n === c.places.length ? `${n} ${n === 1 ? "place" : "places"}` : `${n} of ${c.places.length} places`} + your own pick
+                </span>
+              </TicketRow>
+            );
+          })}
+        </div>
+      </Panel>
+    </Stage>
+  );
+}
 
 function PlaceStep({ nav, sel, patch, role, filters, setFilters, surprise, onSurprise }) {
   const chico = role === "chico";
-  const bz = matchesBZ(filters);
-  const all = matchesAll(filters);
-  const total = ALL_PLACES.length;
-  const shown = ALL_PLACES.filter(all).length;
-  const active = !!(filters.budget || filters.zone || filters.vibe);
-  const groups = CATEGORIES.map((c) => ({ cat: c, list: ALL_PLACES.filter((p) => p.catId === c.id && all(p)) })).filter((g) => g.list.length);
-  const vibeCat = CATEGORIES.find((c) => c.id === filters.vibe);
-  const own = vibeCat ? { catId: vibeCat.id, catTitle: vibeCat.title } : { catId: "", catTitle: "Our own pick" };
+  const ok = matchesBZ(filters);
+  const cat = CATEGORIES.find((c) => c.id === sel.catId);
   const custom = sel.customPlace;
-
-  const pick = (p) => patch({ catId: p.catId, catTitle: p.catTitle, place: p.name, area: p.area, pid: p.id, customPlace: false });
-  const openCustom = () => patch({ ...own, place: "", area: "", pid: "", customPlace: true });
-  // her own pick follows the vibe that is switched on
-  useEffect(() => { if (sel.customPlace) patch(own); }, [filters.vibe]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Surprise me: bring the chosen card into view
   useEffect(() => {
@@ -425,101 +493,64 @@ function PlaceStep({ nav, sel, patch, role, filters, setFilters, surprise, onSur
     el.scrollIntoView({ block: "center", behavior: calm ? "auto" : "smooth" });
   }, [surprise]);
 
-  const budgetLeft = filters.budget ? `Hanggang ${TIERS[filters.budget].sign}` : "Kahit magkano";
-  const peek = `${budgetLeft} · ${filters.zone ? ZONES[filters.zone] : "Kahit saan"}`;
-
-  const pinned = (
-    <>
-      <button
-        type="button" onClick={onSurprise} disabled={!shown}
-        className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-full border-[1.5px] border-dashed border-paper/70 px-6 lg:min-h-12 text-[12px] font-bold uppercase tracking-[0.2em] text-paper transition-colors hover:border-red-lt disabled:opacity-40"
-      >
-        <Dice className="h-5 w-5" /> Surprise me
-      </button>
-      <Group label="Vibe" scroll className="mt-4 lg:mt-5">
-        <Chip dark on={!filters.vibe} onClick={() => setFilters({ ...filters, vibe: "" })} count={ALL_PLACES.filter(bz).length}>Lahat</Chip>
-        {CATEGORIES.map((c) => {
-          const n = ALL_PLACES.filter((p) => p.catId === c.id && bz(p)).length;
-          return (
-            <Chip key={c.id} dark on={filters.vibe === c.id} disabled={!n && filters.vibe !== c.id} count={n}
-              onClick={() => setFilters({ ...filters, vibe: filters.vibe === c.id ? "" : c.id })}>{c.short}</Chip>
-          );
-        })}
-      </Group>
-    </>
-  );
+  if (!cat) return null;
+  const total = ALL_PLACES.length;
+  const shown = ALL_PLACES.filter(ok).length;
+  const list = ALL_PLACES.filter((p) => p.catId === cat.id && ok(p));
+  const hidden = cat.places.length - list.length;
+  const pick = (p) => patch({ place: p.name, area: p.area, pid: p.id, customPlace: false });
+  const openCustom = () => patch({ place: "", area: "", pid: "", customPlace: true });
 
   return (
     <Stage
       nav={nav}
-      title={<Title eyebrow="Step one" sub="What kind of date are we feeling?" photo={PHOTOS.b1} tilt={4} className="mb-2 lg:mb-6">Set the scene</Title>}
+      title={<Title eyebrow="Step two" sub={cat.vibe} photo={PHOTOS.b2} tilt={-4} className="mb-2 lg:mb-6">Set the scene</Title>}
       aside={
-        <SidePanel nav={nav} pinned={pinned} peek={peek} toggleLabel="Budget at layo" startOpen={false}>
-          <Group label="Budget para sa dalawa">
-            <Chip dark on={!filters.budget} onClick={() => setFilters({ ...filters, budget: 0 })}>Kahit magkano</Chip>
-            {[1, 2].map((t) => (
-              <Chip key={t} dark title={`${TIERS[t].label}: ${TIERS[t].range}`} on={filters.budget === t} onClick={() => setFilters({ ...filters, budget: filters.budget === t ? 0 : t })}>Hanggang {TIERS[t].sign}</Chip>
-            ))}
-          </Group>
-          <Group label="Gaano kalayo">
-            <Chip dark on={!filters.zone} onClick={() => setFilters({ ...filters, zone: "" })}>Kahit saan</Chip>
-            {Object.entries(ZONES).map(([k, text]) => (
-              <Chip key={k} dark on={filters.zone === k} onClick={() => setFilters({ ...filters, zone: filters.zone === k ? "" : k })}>{text}</Chip>
-            ))}
-          </Group>
-          <p className="mt-4 text-[11px] font-medium uppercase leading-relaxed tracking-wide text-paper/70 lg:mt-3" role="status">
-            {active ? `${shown} sa ${total} lugar ang bagay.` : `${total} lugar sa kabuuan.`}
-            {active && <button type="button" onClick={() => setFilters(NO_FILTER)} className="ml-2 font-bold text-red-lt underline underline-offset-4">Alisin</button>}
-          </p>
+        <SidePanel nav={nav} pinned={<SurpriseButton onClick={onSurprise} disabled={!shown} />} peek={filterPeek(filters)} toggleLabel="Budget at layo" startOpen={false}>
+          <FilterGroups filters={filters} setFilters={setFilters} shown={shown} total={total} />
         </SidePanel>
       }
     >
-      <Panel head="Mga lugar" aside={active ? `${shown} / ${total}` : `${total}`}>
+      <Panel head="Mga lugar" aside={`${list.length} / ${cat.places.length}`}>
+        <p className="mb-4 font-display text-xl font-black italic leading-tight">{cat.title}</p>
         {surprise && sel.pid === surprise && !custom && (
-          <div className="mb-5 flex items-center justify-between gap-3 rounded-lg bg-ink px-4 py-3 text-paper">
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-ink px-4 py-3 text-paper">
             <p className={`${LABEL} leading-relaxed tracking-[0.2em]`}>Pinili ng tadhana</p>
             <button type="button" onClick={onSurprise} className="inline-flex min-h-11 items-center gap-2 rounded-full border-[1.5px] border-paper/60 px-4 text-[11px] font-bold uppercase tracking-[0.16em]">
               <Dice /> Isa pa
             </button>
           </div>
         )}
+        {hidden > 0 && (
+          <p className="mb-4 text-[11px] font-medium uppercase leading-relaxed tracking-wide text-mute">
+            {hidden} lugar ang nakatago dahil sa filter.
+            <button type="button" onClick={() => setFilters(NO_FILTER)} className="ml-2 font-bold text-red underline underline-offset-4">Ipakita lahat</button>
+          </p>
+        )}
+        <div className="grid gap-3 lg:grid-cols-2" role="group" aria-label="Choose a place">
+          {list.map((p, i) => (
+            <TicketRow key={p.id} id={`pl-${p.id}`} mark={"ABCDEFGH"[i]} label="Place" active={!custom && sel.place === p.name} onClick={() => pick(p)} delay={0.05 * i}>
+              <span className="block pr-6 font-display text-[1.25rem] font-black leading-tight">{p.name}</span>
+              <span className={`${LABEL} mt-1.5 block text-mute`}>{p.area}</span>
+              <span className="mt-3 block text-[12px] font-medium uppercase leading-relaxed tracking-wide text-ink/80">{p.highlights.join("  ·  ")}</span>
+              <span className={`${LABEL} mt-3 flex flex-wrap gap-x-4 gap-y-1 text-red`}>
+                <span>{TIERS[p.budget].sign} {TIERS[p.budget].label}</span>
+                <span>{ZONES[p.zone]}</span>
+              </span>
+            </TicketRow>
+          ))}
+        </div>
 
-        {!groups.length && (
+        {!list.length && (
           <div className="rounded-lg border-[1.5px] border-dashed border-ink px-5 py-8 text-center">
             <p className="font-display text-xl font-black italic">Walang bagay sa mga toggle.</p>
             <button type="button" onClick={() => setFilters(NO_FILTER)} className={`${LABEL} mt-3 min-h-11 text-red underline underline-offset-4`}>Alisin ang filters</button>
           </div>
         )}
 
-        {groups.map(({ cat, list }, gi) => {
-          const before = groups.slice(0, gi).reduce((n, g) => n + g.list.length, 0);
-          return (
-            <section key={cat.id} aria-label={cat.title} className={gi ? "mt-8" : ""}>
-              <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3">
-                <h3 className="font-display text-xl font-black italic leading-tight">{cat.title}</h3>
-                <p className={`${LABEL} text-mute`}>{list.length} {list.length === 1 ? "place" : "places"}</p>
-              </div>
-              <p className="mb-3 text-[11px] font-medium uppercase leading-relaxed tracking-wide text-mute">{cat.vibe}</p>
-              <div className="grid gap-3 lg:grid-cols-2">
-                {list.map((p, i) => (
-                  <TicketRow key={p.id} id={`pl-${p.id}`} mark={before + i + 1} label="Place" active={!custom && sel.place === p.name} onClick={() => pick(p)} delay={Math.min(before + i, 8) * 0.04}>
-                    <span className="block pr-6 font-display text-[1.25rem] font-black leading-tight">{p.name}</span>
-                    <span className={`${LABEL} mt-1.5 block text-mute`}>{p.area}</span>
-                    <span className="mt-3 block text-[12px] font-medium uppercase leading-relaxed tracking-wide text-ink/80">{p.highlights.join("  ·  ")}</span>
-                    <span className={`${LABEL} mt-3 flex flex-wrap gap-x-4 gap-y-1 text-red`}>
-                      <span>{TIERS[p.budget].sign} {TIERS[p.budget].label}</span>
-                      <span>{ZONES[p.zone]}</span>
-                    </span>
-                  </TicketRow>
-                ))}
-              </div>
-            </section>
-          );
-        })}
-
-        <motion.div layout className={`mt-8 rounded-lg border-[1.5px] border-dashed p-5 ${custom ? "border-red bg-card" : "border-ink bg-transparent"}`}>
+        <motion.div layout className={`mt-3 rounded-lg border-[1.5px] border-dashed p-5 ${custom ? "border-red bg-card" : "border-ink bg-transparent"}`}>
           <button type="button" onClick={openCustom} aria-expanded={custom} className="block w-full text-left">
-            <span className={`${LABEL} block text-red`}>{chico ? "Chico's" : "Chica's"} pick{vibeCat ? ` · ${vibeCat.short}` : ""}</span>
+            <span className={`${LABEL} block text-red`}>Option {"ABCDEFGH"[list.length]} {"·"} {chico ? "Chico's" : "Chica's"} pick</span>
             <span className="mt-1 block font-display text-[1.3rem] font-black leading-tight">I have another place in mind!</span>
           </button>
           <AnimatePresence initial={false}>
@@ -528,7 +559,7 @@ function PlaceStep({ nav, sel, patch, role, filters, setFilters, surprise, onSur
                 <label htmlFor="custom-place" className={`${LABEL} mb-1 mt-6 block text-mute`}>{chico ? "Where to?" : "Where to, Chica?"}</label>
                 <input
                   id="custom-place" autoFocus maxLength={120} value={sel.place}
-                  onChange={(e) => patch({ ...own, place: e.target.value, area: "", pid: "", customPlace: true })}
+                  onChange={(e) => patch({ place: e.target.value, area: "", pid: "", customPlace: true })}
                   placeholder="A cafe, a beach, a secret spot"
                   className="w-full border-0 border-b-2 border-ink bg-transparent pb-2 pt-1 font-display text-2xl font-bold italic placeholder:font-normal placeholder:text-mute/50 focus:border-red focus:outline-none"
                 />
@@ -541,7 +572,7 @@ function PlaceStep({ nav, sel, patch, role, filters, setFilters, surprise, onSur
   );
 }
 
-/* ---------- step 2: day and time ---------- */
+/* ---------- step 3: day and time ---------- */
 function Calendar({ value, onChange }) {
   const today = useMemo(() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; }, []);
   const [view, setView] = useState(() => {
@@ -619,7 +650,7 @@ function WhenStep({ nav, sel, patch, role }) {
   return (
     <Stage
       nav={nav}
-      title={<Title eyebrow="Step two" sub={sel.place ? `Our date at ${sel.place}.` : "Choose a day that works for you."} photo={PHOTOS.b4} tilt={4} className="mb-2 lg:mb-6">Lock in the time</Title>}
+      title={<Title eyebrow="Step three" sub={sel.place ? `Our date at ${sel.place}.` : "Choose a day that works for you."} photo={PHOTOS.b4} tilt={4} className="mb-2 lg:mb-6">Lock in the time</Title>}
       aside={
         <SidePanel nav={nav}>
           <Group label="Mabilis na pili">
@@ -662,7 +693,7 @@ function WhenStep({ nav, sel, patch, role }) {
   );
 }
 
-/* ---------- step 3: her say ---------- */
+/* ---------- step 4: her say ---------- */
 const IDEAS = ["Coffee after", "Photo booth", "Merienda muna", "Maglakad-lakad lang", "Walang phone muna"];
 const NOTE_MAX = 300;
 const hasIdea = (note, t) => note.toLowerCase().includes(t.toLowerCase());
@@ -688,7 +719,7 @@ function NoteStep({ nav, sel, patch, role }) {
   return (
     <Stage
       nav={nav}
-      title={<Title eyebrow="Step three" sub="Totally optional. Your idea always counts." photo={PHOTOS.b6} tilt={-4} className="mb-2 lg:mb-6">Your say</Title>}
+      title={<Title eyebrow="Step four" sub="Totally optional. Your idea always counts." photo={PHOTOS.b6} tilt={-4} className="mb-2 lg:mb-6">Your say</Title>}
       aside={
         <SidePanel nav={nav}>
           <Group label="Mga idea">
@@ -1073,7 +1104,7 @@ function MyDates({ role, onBack, onNew, onEdit }) {
 
 
 /* ---------- app ---------- */
-// steps: 0 welcome, 1 place, 2 day and time, 3 her say, 4 the ticket, 5 our dates
+// steps: 0 welcome, 1 vibe, 2 place, 3 day and time, 4 her say, 5 the ticket, 6 our dates
 export default function App() {
   const role = useMemo(() => getRole(), []);
   const [step, setStep] = useState(0);
@@ -1091,9 +1122,9 @@ export default function App() {
     const m = /^#p=(.+)$/.exec(location.hash);
     if (m) {
       const p = dec(m[1]);
-      if (p) { setSel(p); setFromLink(true); setStep(4); return; }
+      if (p) { setSel(p); setFromLink(true); setStep(5); return; }
     }
-    if (new URLSearchParams(location.search).get("open") === "dates") setStep(5);
+    if (new URLSearchParams(location.search).get("open") === "dates") setStep(6);
   }, []);
 
   // what is already planned, for the welcome screen
@@ -1104,22 +1135,29 @@ export default function App() {
   }, [step]);
 
   const canNext =
-    (step === 1 && sel.place.trim().length >= 2) ||
-    (step === 2 && !!sel.date && !!sel.time) ||
-    step === 3;
+    (step === 2 && sel.place.trim().length >= 2) ||
+    (step === 3 && !!sel.date && !!sel.time) ||
+    step === 4;
 
   const hint =
-    step === 1 && !canNext ? "Pick a place to continue" :
-    step === 2 && !canNext ? (!sel.date ? "Pick a day to continue" : "Pick a time to continue") : "";
+    step === 2 && !canNext ? "Pick a place to continue" :
+    step === 3 && !canNext ? (!sel.date ? "Pick a day to continue" : "Pick a time to continue") : "";
+
+  const pickCategory = (c) => {
+    if (sel.catId !== c.id) patch({ catId: c.id, catTitle: c.title, place: "", area: "", pid: "", customPlace: false });
+    setSurprise("");
+    go(2);
+  };
 
   const surpriseMe = () => {
-    const ok = matchesAll(filters);
+    const ok = matchesBZ(filters);
     const pool = ALL_PLACES.filter(ok).filter((p) => p.id !== surprise);
     const list = pool.length ? pool : ALL_PLACES.filter(ok);
     if (!list.length) return;
     const p = list[Math.floor(Math.random() * list.length)];
     setSurprise(p.id);
     setSel((s) => ({ ...s, catId: p.catId, catTitle: p.catTitle, place: p.name, area: p.area, pid: p.id, customPlace: false }));
+    if (step !== 2) go(2);
   };
 
   const fresh = () => {
@@ -1133,22 +1171,23 @@ export default function App() {
     const cat = f ? f.cat : CATEGORIES.find((c) => c.title === e.vibe);
     forgetPlanKey();
     setSel({
-      catId: cat ? cat.id : "", catTitle: cat ? cat.title : e.vibe || "Our own pick", place: e.place, area: e.area || "", pid: f ? f.place.id : "",
+      catId: cat ? cat.id : "", catTitle: cat ? cat.title : e.vibe || "", place: e.place, area: e.area || "", pid: f ? f.place.id : "",
       customPlace: !f, date: e.date, time: e.time, note: e.note || ""
     });
     setReplacing(e); setFromLink(false); setSurprise(""); setFilters(NO_FILTER);
-    go(2);
+    go(cat ? 3 : 1);
   };
 
   const waiting = role === "chica" && dates.some((x) => statusOf(x) === "proposed" && byOf(x) === "chico");
-  const nav = { step, sel, canNext, hint, nextLabel: step === 3 ? "See our plan" : "Continue", back: () => go(step - 1), next: () => go(step + 1), jump: go };
+  const nav = { step, sel, canNext, hint, noNext: step === 1, nextLabel: step === 4 ? "See our plan" : "Continue", back: () => go(step - 1), next: () => go(step + 1), jump: go };
 
   let body;
-  if (step === 0) body = <Welcome role={role} onStart={() => { fresh(); go(1); }} mine={dates.length} waiting={waiting} next={dates[0]} onDates={() => go(5)} />;
-  else if (step === 5) body = <MyDates role={role} onBack={() => go(0)} onNew={() => { fresh(); go(1); }} onEdit={startEdit} />;
-  else if (step === 4) body = <Confirm role={role} sel={sel} replacing={replacing} readOnly={fromLink} onEdit={() => { setFromLink(false); go(3); }} onRestart={() => { fresh(); go(1); }} />;
-  else if (step === 1) body = <PlaceStep nav={nav} sel={sel} patch={patch} role={role} filters={filters} setFilters={setFilters} surprise={surprise} onSurprise={surpriseMe} />;
-  else if (step === 2) body = <WhenStep nav={nav} sel={sel} patch={patch} role={role} />;
+  if (step === 0) body = <Welcome role={role} onStart={() => { fresh(); go(1); }} mine={dates.length} waiting={waiting} next={dates[0]} onDates={() => go(6)} />;
+  else if (step === 6) body = <MyDates role={role} onBack={() => go(0)} onNew={() => { fresh(); go(1); }} onEdit={startEdit} />;
+  else if (step === 5) body = <Confirm role={role} sel={sel} replacing={replacing} readOnly={fromLink} onEdit={() => { setFromLink(false); go(4); }} onRestart={() => { fresh(); go(1); }} />;
+  else if (step === 1) body = <CategoryStep nav={nav} sel={sel} onPick={pickCategory} filters={filters} setFilters={setFilters} onSurprise={surpriseMe} />;
+  else if (step === 2) body = <PlaceStep nav={nav} sel={sel} patch={patch} role={role} filters={filters} setFilters={setFilters} surprise={surprise} onSurprise={surpriseMe} />;
+  else if (step === 3) body = <WhenStep nav={nav} sel={sel} patch={patch} role={role} />;
   else body = <NoteStep nav={nav} sel={sel} patch={patch} role={role} />;
 
   return (
