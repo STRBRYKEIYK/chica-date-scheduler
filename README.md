@@ -33,7 +33,7 @@ Pressing "Send to Chico" posts the plan to `/date/api/send`, which pings every c
 | Channel | Variables | Notes |
 | --- | --- | --- |
 | ntfy (push to your phone) | none, or `NTFY_TOPIC` | Works out of the box. The topic is derived from the Vercel project id (private), so it is not in this repo. Subscribe to it in the ntfy app. The push has an "Add to Google Calendar" button. |
-| Telegram | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Message includes the Google Calendar link. |
+| Telegram | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Message includes the Google Calendar link. Add `TELEGRAM_CHICA_CHAT_ID` and Chica gets a confirmation too (she must press Start on the bot first). |
 | Email (Resend) | `RESEND_API_KEY`, `NOTIFY_EMAIL` | `onboarding@resend.dev` only delivers to the Resend account's own email. |
 | WhatsApp (CallMeBot) | `CALLMEBOT_APIKEY`, `NOTIFY_PHONE` | One-time activation with CallMeBot, free. |
 

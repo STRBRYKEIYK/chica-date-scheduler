@@ -27,7 +27,18 @@ export default async function handler(req, res) {
     note ? `Her extras: ${note}` : ""
   ].filter(Boolean).join("\n");
 
+  const prettyDay = new Date(`${date}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+  const chicaText = [
+    "DATE NATIN, ASAWA KO! \u{1F970}",
+    "",
+    `LUGAR: ${place}${area ? ` (${area})` : ""}`.toUpperCase(),
+    `ARAW: ${prettyDay}`.toUpperCase(),
+    `ORAS: ${time}`.toUpperCase(),
+    note ? `IDINAGDAG MO: ${note}`.toUpperCase() : "",
+    "",
+    "ABANGAN KITA SA ARAW NA YAN, MI CHICA. - CHICO \u2764\uFE0F"
+  ].filter((l, i, a) => l !== "" || (i > 0 && a[i - 1] !== "")).join("\n");
   const calendarUrl = googleCalendarUrl({ catTitle, place, area, date, time, note });
-  const out = await notify({ text, subject: `Chica picked a date: ${place}, ${date}`, calendarUrl });
+  const out = await notify({ text, subject: `Chica picked a date: ${place}, ${date}`, calendarUrl, chicaText });
   res.status(200).json(out);
 }

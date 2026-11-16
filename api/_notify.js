@@ -22,12 +22,13 @@ export function channels(env = process.env) {
     ntfy: Boolean(topic),
     ntfyFingerprint: topic ? sha(`fp:${topic}`).slice(0, 8) : "",
     telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
+    telegramChica: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHICA_CHAT_ID),
     email: Boolean(env.RESEND_API_KEY && env.NOTIFY_EMAIL),
     whatsapp: Boolean(env.CALLMEBOT_APIKEY && env.NOTIFY_PHONE)
   };
 }
 
-export default async function notify({ text, subject, calendarUrl }) {
+export default async function notify({ text, subject, calendarUrl, chicaText }) {
   const env = process.env;
   const jobs = {};
   const withCal = calendarUrl ? `${text}\n\nAdd to Google Calendar:\n${calendarUrl}` : text;
@@ -46,6 +47,13 @@ export default async function notify({ text, subject, calendarUrl }) {
   if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
     jobs.telegram = post(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, { chat_id: env.TELEGRAM_CHAT_ID, text: withCal });
   }
+  // Optional: a sweet confirmation to Chica herself, once she has pressed Start on the bot.
+  if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHICA_CHAT_ID && chicaText) {
+    jobs.telegramChica = post(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      chat_id: env.TELEGRAM_CHICA_CHAT_ID,
+      text: calendarUrl ? `${chicaText}\n\nSave the date:\n${calendarUrl}` : chicaText
+    });
+  }
   if (env.RESEND_API_KEY && env.NOTIFY_EMAIL) {
     jobs.email = post(
       "https://api.resend.com/emails",
@@ -62,5 +70,6 @@ export default async function notify({ text, subject, calendarUrl }) {
   const results = await Promise.allSettled(keys.map((k) => jobs[k]));
   const sent = {};
   keys.forEach((k, i) => { sent[k] = results[i].status === "fulfilled" && results[i].value === true; });
-  return { ok: Object.values(sent).some(Boolean), sent };
+  const forKeith = Object.entries(sent).filter(([k]) => k !== "telegramChica").map(([, v]) => v);
+  return { ok: forKeith.some(Boolean), sent };
 }
