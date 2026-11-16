@@ -3,22 +3,22 @@
 @tailwind utilities;
 
 :root { color-scheme: light; }
-html, body { background: #0f1438; }
-body { font-family: "Outfit", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+html, body { background: #121111; }
+body { font-family: "DM Sans", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 button, select, textarea, input { font: inherit; }
-:focus-visible { outline: 3px solid #ff5c8a; outline-offset: 3px; }
+:focus-visible { outline: 3px solid #c8102e; outline-offset: 3px; }
 
-.grid-floor {
-  background-image:
-    linear-gradient(rgba(255, 92, 138, 0.45) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 92, 138, 0.45) 1px, transparent 1px);
-  background-size: 44px 44px;
-  transform: perspective(340px) rotateX(62deg);
-  transform-origin: top;
-  mask-image: linear-gradient(to bottom, black, transparent 92%);
+.bars {
+  background: repeating-linear-gradient(90deg, currentColor 0 2px, transparent 2px 4px, currentColor 4px 5px, transparent 5px 8px, currentColor 8px 11px, transparent 11px 12px);
 }
-.ticket-notch::before, .ticket-notch::after {
-  content: ""; position: absolute; top: -12px; width: 24px; height: 24px; border-radius: 9999px; background: #0f1438;
+.ruled {
+  background-image: repeating-linear-gradient(transparent, transparent 35px, #d6d3cb 35px, #d6d3cb 36px);
+  background-attachment: local;
+  line-height: 36px;
 }
-.ticket-notch::before { left: -12px; }
-.ticket-notch::after { right: -12px; }
+.notch { position: relative; }
+.notch::before, .notch::after {
+  content: ""; position: absolute; top: -11px; width: 22px; height: 22px; border-radius: 9999px; background: #121111;
+}
+.notch::before { left: -11px; }
+.notch::after { right: -11px; }
