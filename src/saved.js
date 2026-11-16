@@ -37,4 +37,14 @@ export function saveDate(id, sel, sent) {
     });
     localStorage.setItem(KEY, JSON.stringify(rest.slice(-40)));
   } catch { /* storage blocked, the plan itself still works */ }
+  remember({ id, date: sel.date, time: sel.time || "", place: sel.place || "", area: sel.area || "", vibe: sel.catTitle || "", sent: !!sent });
+}
+
+// Also tell the server, so the calendar on any device (Chico's too) can show the heart. Best effort.
+function remember(entry) {
+  try {
+    fetch(`${import.meta.env.BASE_URL}api/dates`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(entry), keepalive: true
+    }).catch(() => {});
+  } catch { /* offline or blocked, it is still saved on this device */ }
 }

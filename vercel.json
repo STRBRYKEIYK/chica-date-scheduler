@@ -1,9 +1,24 @@
 {
   "redirects": [
-    { "source": "/", "destination": "/date/", "permanent": false },
-    { "source": "/date", "destination": "/date/", "permanent": false }
+    {
+      "source": "/",
+      "destination": "/date/",
+      "permanent": false
+    },
+    {
+      "source": "/date",
+      "destination": "/date/",
+      "permanent": false
+    }
   ],
   "rewrites": [
-    { "source": "/date/api/send", "destination": "/api/date" }
+    {
+      "source": "/date/api/send",
+      "destination": "/api/date"
+    },
+    {
+      "source": "/date/api/dates",
+      "destination": "/api/dates"
+    }
   ]
 }

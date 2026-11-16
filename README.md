@@ -26,6 +26,12 @@ The app is served at `https://chica.keicodes.dev/date/`.
 
 The build output goes to `dist/date` and everything uses the `/date/` base. The form posts to `/date/api/send`, which `vercel.json` rewrites to `api/date.js`.
 
+## Remembering the dates (Library calendar)
+
+When Chica confirms a plan, the date is saved in her browser and sent to `/date/api/dates`, which keeps it in a Vercel Blob store. The Library page (`chica.keicodes.dev`) reads that list to put a pentel-pen heart on each date, on any phone or computer.
+
+One-time setup, in the Vercel dashboard (personal account): this project > Storage > Create > Blob > choose **Private** > Connect to this project. That adds `BLOB_READ_WRITE_TOKEN`; redeploy once. If you pick a Public store instead, add `BLOB_ACCESS=public`. Until the store is connected the endpoint answers `enabled: false` and dates still show on the phone that set them.
+
 ## Alerts
 
 Pressing "Send to Chico" posts the plan to `/date/api/send`, which pings every channel that is switched on.
