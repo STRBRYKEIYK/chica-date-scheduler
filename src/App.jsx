@@ -3,6 +3,7 @@ import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { CATEGORIES, TIMES } from "./data.js";
 import { PHOTOS } from "./photos.js";
 import { googleCalendarUrl, icsFile } from "./calendar.js";
+import { forgetPlanKey, planKey, saveDate } from "./saved.js";
 
 const STEPS = ["Vibe", "Place", "Date & time", "Your say"];
 const EMPTY = { catId: "", catTitle: "", place: "", area: "", customPlace: false, date: "", time: "", note: "" };
@@ -414,6 +415,9 @@ function Confirm({ sel, onRestart, onEdit }) {
     return () => clearTimeout(t);
   }, [status]);
   const [copied, setCopied] = useState("");
+  const planId = useMemo(() => planKey(), []);
+  // keep the chosen day on her device so the Library calendar can put a heart on it
+  useEffect(() => { saveDate(planId, sel, status === "sent"); }, [planId, sel.date, sel.time, sel.place, sel.area, sel.catTitle, status]);
   const custom = isCustomPlan(sel);
   const text = planText(sel);
   const link = `${location.origin}${location.pathname}#p=${enc(sel)}`;
@@ -558,7 +562,7 @@ export default function App() {
 
   let body;
   if (step === 0) body = <Welcome onStart={() => go(1)} />;
-  else if (step === 5) body = <Confirm sel={sel} onEdit={() => go(4)} onRestart={() => { history.replaceState(null, "", location.pathname); setSel(EMPTY); go(1); }} />;
+  else if (step === 5) body = <Confirm sel={sel} onEdit={() => go(4)} onRestart={() => { forgetPlanKey(); history.replaceState(null, "", location.pathname); setSel(EMPTY); go(1); }} />;
   else {
     body = (
       <div className="min-h-dvh bg-paper text-ink">
