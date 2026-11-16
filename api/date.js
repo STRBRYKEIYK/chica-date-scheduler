@@ -1,10 +1,13 @@
 // Receives Chica's date plan and pings Keith. Free text comes from the request, so it is cleaned and capped.
-import notify from "./_notify.js";
+import notify, { channels } from "./_notify.js";
+import { googleCalendarUrl } from "../src/calendar.js";
 
 const clean = (v, max) =>
   typeof v === "string" ? v.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, max) : "";
 
 export default async function handler(req, res) {
+  // GET only reports which alert channels are switched on (no secrets), handy for checking a deploy.
+  if (req.method === "GET") { res.status(200).json({ ok: true, channels: channels() }); return; }
   if (req.method !== "POST") { res.status(405).json({ ok: false }); return; }
   const b = req.body || {};
   const catTitle = clean(b.catTitle, 80);
@@ -24,6 +27,7 @@ export default async function handler(req, res) {
     note ? `Her extras: ${note}` : ""
   ].filter(Boolean).join("\n");
 
-  const out = await notify(text, `Chica picked a date: ${place}, ${date}`);
+  const calendarUrl = googleCalendarUrl({ catTitle, place, area, date, time, note });
+  const out = await notify({ text, subject: `Chica picked a date: ${place}, ${date}`, calendarUrl });
   res.status(200).json(out);
 }

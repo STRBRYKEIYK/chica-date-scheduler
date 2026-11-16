@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { CATEGORIES, TIMES } from "./data.js";
 import { PHOTOS } from "./photos.js";
+import { googleCalendarUrl, icsFile } from "./calendar.js";
 
 const STEPS = ["Vibe", "Place", "Date & time", "Your say"];
 const EMPTY = { catId: "", catTitle: "", place: "", area: "", customPlace: false, date: "", time: "", note: "" };
@@ -427,6 +428,16 @@ function Confirm({ sel, onRestart, onEdit }) {
       setStatus("fail");
     }
   };
+  const calUrl = googleCalendarUrl(sel);
+  const saveIcs = () => {
+    const url = URL.createObjectURL(new Blob([icsFile(sel)], { type: "text/calendar;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = "Chico-and-Chica-date.ics";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  };
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  const share = async () => { try { await navigator.share({ title: "Chico + Chica date", text, url: link }); } catch { /* closed the sheet */ } };
   const copy = async (what, value) => {
     try { await navigator.clipboard.writeText(value); setCopied(what); setTimeout(() => setCopied(""), 1800); }
     catch { setCopied("manual"); }
@@ -486,13 +497,24 @@ function Confirm({ sel, onRestart, onEdit }) {
           </button>
           <p role="status" className="min-h-6 text-center text-[12px] font-medium uppercase leading-relaxed tracking-wide text-paper/80">
             {status === "sent" && "Nakarating na kay Chico ang plano mo."}
-            {status === "fail" && "Di ko nasend nang automatic. Gamitin ang WhatsApp sa baba."}
+            {status === "fail" && "Hindi pa umabot kay Chico. Gamitin ang WhatsApp o Share sa baba."}
             {copied === "manual" && "Di ma-copy dito. Pindutin nang matagal ang text para kopyahin."}
           </p>
-          <a
-            href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener"
-            className="inline-flex min-h-14 items-center justify-center rounded-full border-[1.5px] border-paper/50 px-6 text-[12px] font-bold uppercase tracking-[0.2em]"
-          >Send on WhatsApp</a>
+          <div className="mt-2 border-t border-paper/20 pt-5">
+            <p className={`${LABEL} text-red-lt`}>Save the date, Chica</p>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <a href={calUrl} target="_blank" rel="noopener" className="inline-flex min-h-12 items-center justify-center rounded-full border-[1.5px] border-paper/60 px-3 text-center text-[11px] font-bold uppercase tracking-[0.16em]">Google Calendar</a>
+              <button onClick={saveIcs} className="min-h-12 rounded-full border-[1.5px] border-paper/60 px-3 text-[11px] font-bold uppercase tracking-[0.16em]">Apple / Outlook</button>
+            </div>
+            <p className="mt-2 text-center text-[11px] font-medium uppercase tracking-wide text-paper/60">May paalala 1 araw at 2 oras bago ang date</p>
+          </div>
+          <div className={`mt-2 grid gap-3 ${canShare ? "grid-cols-2" : ""}`}>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener"
+              className="inline-flex min-h-12 items-center justify-center rounded-full border-[1.5px] border-paper/50 px-3 text-[11px] font-bold uppercase tracking-[0.1em]"
+            >{canShare ? "WhatsApp" : "Send on WhatsApp"}</a>
+            {canShare && <button onClick={share} className="min-h-12 rounded-full border-[1.5px] border-paper/50 px-3 text-[11px] font-bold uppercase tracking-[0.1em]">Messenger &amp; more</button>}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <button onClick={() => copy("plan", text)} className="min-h-12 rounded-full border border-paper/25 px-4 text-[11px] font-bold uppercase tracking-[0.2em]">{copied === "plan" ? "Copied" : "Copy plan"}</button>
             <button onClick={() => copy("link", link)} className="min-h-12 rounded-full border border-paper/25 px-4 text-[11px] font-bold uppercase tracking-[0.2em]">{copied === "link" ? "Copied" : "Copy link"}</button>
