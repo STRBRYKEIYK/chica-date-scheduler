@@ -56,3 +56,9 @@ export const blobIO = {
     await put(PATH, JSON.stringify(list), { access: access(), contentType: "application/json", addRandomSuffix: false, allowOverwrite: true, ...creds() });
   }
 };
+
+export async function probe() {
+  await put("probe.json", JSON.stringify({ t: Date.now() }), { access: access(), contentType: "application/json", addRandomSuffix: false, allowOverwrite: true, ...creds() });
+  const r = await get("probe.json", { access: access(), useCache: false, ...creds() });
+  return Boolean(r && r.statusCode === 200);
+}
