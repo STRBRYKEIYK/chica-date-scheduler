@@ -11,6 +11,10 @@ export default {
         line: "#d6d3cb",
         red: { DEFAULT: "#c8102e", lt: "#ff4b63" }
       },
+      keyframes: {
+        marquee: { "0%": { transform: "translateX(0)" }, "100%": { transform: "translateX(-50%)" } }
+      },
+      animation: { marquee: "marquee 28s linear infinite" },
       fontFamily: {
         display: ['"Playfair Display"', "Georgia", "serif"],
         body: ['"DM Sans"', "system-ui", "sans-serif"]

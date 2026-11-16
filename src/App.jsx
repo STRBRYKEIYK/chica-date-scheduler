@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { CATEGORIES, TIMES } from "./data.js";
+import { PHOTOS } from "./photos.js";
 
 const STEPS = ["Vibe", "Place", "Date & time", "Your say"];
 const EMPTY = { catId: "", catTitle: "", place: "", area: "", customPlace: false, date: "", time: "", note: "" };
@@ -69,28 +70,63 @@ const variants = {
 };
 
 /* ---------- welcome ---------- */
+function Ticker() {
+  const unit = (k) => (
+    <span key={k} className="flex shrink-0 items-center gap-5 pr-5">
+      {["Chico", "Chica", "3:33 PM", "Date night", "Admit two"].map((t) => (
+        <span key={t} className="flex items-center gap-5">
+          <span>{t}</span>
+          <Heart className="h-2.5 w-2.5" />
+        </span>
+      ))}
+    </span>
+  );
+  return (
+    <div className="overflow-hidden bg-red py-2 text-[10px] font-bold uppercase tracking-[0.3em] text-white" aria-hidden="true">
+      <div className="flex w-max animate-marquee motion-reduce:animate-none">{[0, 1, 2, 3].map(unit)}</div>
+    </div>
+  );
+}
+
 function Welcome({ onStart }) {
   return (
     <div className="min-h-dvh bg-ink text-paper">
-      <div className="mx-auto flex min-h-dvh max-w-xl flex-col px-6 pb-10 pt-8">
+      <Ticker />
+      <div className="mx-auto flex min-h-[calc(100dvh-34px)] max-w-xl flex-col px-6 pb-10 pt-6">
         <div className={`${LABEL} flex justify-between text-paper/55`}>
           <span>3:33 PM</span>
           <span>11.16.2026</span>
         </div>
 
-        <div className="mt-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.6 }}
+          className="relative mx-auto mt-7 w-[86%] max-w-sm"
+        >
+          <div className="print absolute -right-3 top-3 w-[62%] rotate-[5deg]">
+            <div className="aspect-[4/3]"><img src={PHOTOS.b5} alt="" loading="eager" decoding="async" /></div>
+          </div>
+          <div className="print relative w-[72%] -rotate-[3deg]">
+            <div className="aspect-[4/3]"><img src={PHOTOS.b3} alt="Chico and Chica in matching sunglasses" loading="eager" decoding="async" /></div>
+            <p className="absolute inset-x-0 bottom-1.5 text-center text-[8px] font-bold uppercase tracking-[0.3em] text-mute">Nos. 1116 &middot; 0333</p>
+          </div>
+          <span className="absolute -bottom-2 -right-1 rotate-[-4deg] border-[1.5px] border-red-lt bg-ink px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.28em] text-red-lt">
+            Admit two
+          </span>
+        </motion.div>
+
+        <div className="mt-auto pt-10">
           <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className={`${LABEL} text-red-lt`}>
             Isang imbitasyon
           </motion.p>
           <motion.h1
             initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.6 }}
-            className="mt-4 font-display text-[3.6rem] font-black italic leading-[0.94] sm:text-7xl"
+            className="mt-4 font-display text-[3.2rem] font-black italic leading-[0.94] sm:text-7xl"
           >
             Chico invites <span className="text-red-lt">Chica</span> on a date.
             <Heart className="ml-2 inline-block h-[0.4em] w-[0.4em] align-[0.1em] text-red-lt" />
           </motion.h1>
 
-          <motion.dl initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }} className="mt-10 border-t-[1.5px] border-paper">
+          <motion.dl initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }} className="mt-8 border-t-[1.5px] border-paper">
             {[["Para kay", "Chicaaaaa ko"], ["Mula kay", "Chicooo mo"], ["Ikaw ang pipili", "Lugar, araw, oras"]].map(([k, v]) => (
               <div key={k} className="grid grid-cols-[116px_1fr] gap-3 border-b border-paper/20 py-3">
                 <dt className={`${LABEL} pt-0.5 text-red-lt`}>{k}</dt>
@@ -131,11 +167,19 @@ function Header({ step, onBack }) {
   );
 }
 
-function Title({ eyebrow, children, sub }) {
+function Title({ eyebrow, children, sub, photo, tilt = 4 }) {
   return (
-    <div className="mb-7">
+    <div className="relative mb-7">
+      {photo && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, rotate: 0 }} animate={{ opacity: 1, scale: 1, rotate: tilt }} transition={{ delay: 0.15, duration: 0.5 }}
+          className="print absolute right-0 top-0 w-[88px]" aria-hidden="true"
+        >
+          <div className="aspect-square"><img src={photo} alt="" loading="lazy" decoding="async" /></div>
+        </motion.div>
+      )}
       <p className={`${LABEL} text-red`}>{eyebrow}</p>
-      <h2 className="mt-2 font-display text-[2.6rem] font-black italic leading-[1.02]">{children}</h2>
+      <h2 className={`mt-2 font-display text-[2.6rem] font-black italic leading-[1.02] ${photo ? "pr-24" : ""}`}>{children}</h2>
       {sub && <p className="mt-3 max-w-[34ch] text-[13px] font-medium uppercase leading-relaxed tracking-wide text-mute">{sub}</p>}
     </div>
   );
@@ -164,7 +208,7 @@ function TicketRow({ mark, label, active, onClick, children, delay = 0 }) {
 function CategoryStep({ sel, onPick }) {
   return (
     <>
-      <Title eyebrow="Step one" sub="What kind of date are we feeling?">Pick the vibe</Title>
+      <Title eyebrow="Step one" sub="What kind of date are we feeling?" photo={PHOTOS.b1} tilt={4}>Pick the vibe</Title>
       <div className="grid gap-4">
         {CATEGORIES.map((c, i) => (
           <TicketRow key={c.id} mark={i + 1} label="Vibe" active={sel.catId === c.id} onClick={() => onPick(c)} delay={0.05 * i}>
@@ -190,7 +234,7 @@ function PlaceStep({ sel, patch }) {
 
   return (
     <>
-      <Title eyebrow="Step two" sub={cat.vibe}>Set the scene</Title>
+      <Title eyebrow="Step two" sub={cat.vibe} photo={PHOTOS.b2} tilt={-4}>Set the scene</Title>
       <p className="mb-4 font-display text-lg font-bold italic">{cat.title}</p>
       <div className="grid gap-4" role="group" aria-label="Choose a place">
         {cat.places.map((p, i) => (
@@ -278,7 +322,7 @@ function Calendar({ value, onChange }) {
 function WhenStep({ sel, patch }) {
   return (
     <>
-      <Title eyebrow="Step three" sub={sel.place ? `Our date at ${sel.place}.` : "Choose a day that works for you."}>Lock in the time</Title>
+      <Title eyebrow="Step three" sub={sel.place ? `Our date at ${sel.place}.` : "Choose a day that works for you."} photo={PHOTOS.b4} tilt={4}>Lock in the time</Title>
       <div className="grid gap-5">
         <Calendar value={sel.date} onChange={(date) => patch({ date })} />
         <div>
@@ -307,7 +351,7 @@ function WhenStep({ sel, patch }) {
 function NoteStep({ sel, patch }) {
   return (
     <>
-      <Title eyebrow="Step four" sub="Totally optional. Your idea always counts.">Your say</Title>
+      <Title eyebrow="Step four" sub="Totally optional. Your idea always counts." photo={PHOTOS.b6} tilt={-4}>Your say</Title>
       <div className="rounded-lg border-[1.5px] border-ink bg-card p-5">
         <label htmlFor="note" className="block font-display text-xl font-black italic leading-snug">
           Anything else you want to add, change, or do on this date, Chica?
@@ -333,8 +377,41 @@ function Row({ label, children }) {
   );
 }
 
+const CONFETTI_COLORS = ["#c8102e", "#ff4b63", "#f3f3f0", "#c8102e", "#fdfdfb"];
+function Confetti() {
+  const bits = useMemo(
+    () => Array.from({ length: 44 }, (_, i) => {
+      const r = (a, b) => a + Math.random() * (b - a);
+      return { i, x: r(-170, 170), up: r(150, 330), fall: r(60, 260), rot: r(-540, 540), w: r(5, 9), h: r(9, 16), d: r(0, 0.12), t: r(1.5, 2.3), c: CONFETTI_COLORS[i % CONFETTI_COLORS.length] };
+    }),
+    []
+  );
+  return (
+    <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden" aria-hidden="true">
+      {bits.map((b) => (
+        <motion.span
+          key={b.i}
+          className="absolute left-1/2 top-[62%] block"
+          style={{ width: b.w, height: b.h, background: b.c }}
+          initial={{ x: 0, y: 0, opacity: 1, rotate: 0 }}
+          animate={{ x: b.x, y: [0, -b.up, b.fall], opacity: [1, 1, 0], rotate: b.rot }}
+          transition={{ duration: b.t, delay: b.d, ease: "easeOut", times: [0, 0.42, 1] }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function Confirm({ sel, onRestart, onEdit }) {
   const [status, setStatus] = useState("idle");
+  const [boom, setBoom] = useState(false);
+  useEffect(() => {
+    if (status !== "sent") return;
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    setBoom(true);
+    const t = setTimeout(() => setBoom(false), 2800);
+    return () => clearTimeout(t);
+  }, [status]);
   const [copied, setCopied] = useState("");
   const custom = isCustomPlan(sel);
   const text = planText(sel);
@@ -357,6 +434,7 @@ function Confirm({ sel, onRestart, onEdit }) {
 
   return (
     <div className="min-h-dvh bg-ink text-paper">
+      {boom && <Confetti />}
       <div className="mx-auto max-w-xl px-6 pb-14 pt-6">
         <button onClick={onEdit} className={`${LABEL} -ml-1 inline-flex min-h-11 items-center gap-2 pr-3`}><Arrow flip /> Change something</button>
         <p className={`${LABEL} mt-6 text-red-lt`}>Pasok na, asawa ko</p>
@@ -375,6 +453,13 @@ function Confirm({ sel, onRestart, onEdit }) {
               )}
             </div>
             <Heart className="mt-1 h-6 w-6 shrink-0 text-red" />
+          </div>
+          <div className="grid grid-cols-3 gap-[3px] border-b-[1.5px] border-ink bg-ink" aria-hidden="true">
+            {[PHOTOS.b2, PHOTOS.b3, PHOTOS.b6].map((src, i) => (
+              <div key={i} className="aspect-[4/3] overflow-hidden bg-line">
+                <img src={src} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover grayscale" />
+              </div>
+            ))}
           </div>
           <dl className="px-5 pb-2 pt-1">
             <Row label="Vibe">{sel.catTitle}</Row>
