@@ -38,11 +38,28 @@ export function sanitize(b, now = Date.now()) {
   };
 }
 
-// One entry per plan id. A plan that was already sent stays sent.
+// A date is the same date when the day and the place match (case and spacing ignored), whichever plan id saved it.
+// Every new browser tab gets a new plan id, so ids alone let the same date pile up.
+export const slot = (x) => `${x.date}|${String(x.place || "").toLowerCase().replace(/\s+/g, " ").trim()}`;
+
+// Collapses repeats of the same date: the newest one wins, and if any of them was sent it stays sent.
+export function dedupe(list) {
+  const by = new Map();
+  for (const x of Array.isArray(list) ? list : []) {
+    if (!x || typeof x !== "object" || typeof x.date !== "string") continue;
+    const k = slot(x), c = by.get(k);
+    if (!c) { by.set(k, x); continue; }
+    const win = (x.savedAt || 0) >= (c.savedAt || 0) ? x : c;
+    by.set(k, { ...win, sent: Boolean(x.sent || c.sent) });
+  }
+  return [...by.values()].sort((a, b) => (a.savedAt || 0) - (b.savedAt || 0));
+}
+
+// One entry per plan id and per date+place. A plan that was already sent stays sent.
 export function upsert(list, entry, max = MAX) {
-  const prev = list.find((x) => x && x.id === entry.id);
-  const next = { ...entry, sent: entry.sent || Boolean(prev && prev.sent) };
-  return list.filter((x) => x && x.id !== entry.id).concat(next).sort((a, b) => (a.savedAt || 0) - (b.savedAt || 0)).slice(-max);
+  const old = list.filter((x) => x && (x.id === entry.id || (typeof x.date === "string" && slot(x) === slot(entry))));
+  const next = { ...entry, sent: entry.sent || old.some((x) => x.sent) };
+  return dedupe(list.filter((x) => !old.includes(x)).concat(next)).slice(-max);
 }
 
 export const blobIO = {
