@@ -22,6 +22,7 @@ export const CHECK_NOTE = "Paki-check ang oras ng bukas bago pumunta.";
 export const CATEGORIES = [
   {
     id: "urban",
+    short: "City & malls",
     title: "Urban Adventures & Grand Malls",
     vibe: "Bustling, massive variety, bright city lights.",
     glow: "#ff5c8a",
@@ -34,6 +35,7 @@ export const CATEGORIES = [
   },
   {
     id: "chill",
+    short: "Chill",
     title: "Chill & Familiar",
     vibe: "Laid-back, nostalgic, easy-going mall dates.",
     glow: "#ffb25b",
@@ -46,6 +48,7 @@ export const CATEGORIES = [
   },
   {
     id: "scenic",
+    short: "Nature walks",
     title: "Scenic Walk Trips & Nature Breeze",
     vibe: "Outdoor breeze, walking hand-in-hand, active and relaxed.",
     glow: "#ff8a5b",
@@ -61,6 +64,7 @@ export const CATEGORIES = [
   },
   {
     id: "food",
+    short: "Food crawl",
     title: "Cultural & Culinary Food Crawls",
     vibe: "Flavorful walk trips, historic spots, eating all day.",
     glow: "#f7a8d0",
@@ -75,6 +79,7 @@ export const CATEGORIES = [
   },
   {
     id: "art",
+    short: "Art & quiet",
     title: "Art, Museums & Quiet Corners",
     vibe: "Slow wandering, little galleries, and a coffee after.",
     glow: "#7fb7ff",
@@ -87,6 +92,7 @@ export const CATEGORIES = [
   },
   {
     id: "intimate",
+    short: "Staycation",
     title: "Intimate Escapes & Staycations",
     vibe: "Private, cozy, uninterrupted time together.",
     glow: "#b38cff",
