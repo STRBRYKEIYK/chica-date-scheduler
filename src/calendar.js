@@ -1,6 +1,6 @@
 // Calendar helpers shared by the page (Save the date) and the API route (alert link).
 // Plans are in Philippine time. Manila is UTC+8 all year, so no daylight-saving math is needed.
-import { CATEGORIES } from "./data.js";
+import { findPlace, budgetFor, checklistFor, BUDGET_NOTE, CHECK_NOTE } from "./data.js";
 
 const PH_OFFSET_HOURS = 8;
 const HOURS = 3;
@@ -24,14 +24,6 @@ export function eventWindow(date, time) {
 
 const stamp = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 
-const norm = (s) => String(s || "").trim().toLowerCase();
-
-// The curated spot she picked, if it is one of ours (the vibe line and the highlights come from it).
-function curated(plan) {
-  for (const c of CATEGORIES) for (const p of c.places) if (norm(p.name) === norm(plan.place)) return { cat: c, place: p };
-  return null;
-}
-
 // "Binondo, Manila, Philippines": what the calendar apps look up to draw the pin. "Pasay or Malate" keeps just the first.
 export function mapsQuery(plan) {
   const area = String(plan.area || "").split(/\s+or\s+/i)[0].trim();
@@ -40,6 +32,11 @@ export function mapsQuery(plan) {
 
 export function mapsUrl(plan) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery(plan))}`;
+}
+
+// Opens the route from wherever she is, by public transport first.
+export function directionsUrl(plan) {
+  return `https://www.google.com/maps/dir/?api=1&travelmode=transit&destination=${encodeURIComponent(mapsQuery(plan))}`;
 }
 
 const prettyDay = (date) => {
@@ -53,19 +50,25 @@ export function eventParts(plan) {
   if (!win) return null;
   const title = "Chico and Chica's Date \u2764\uFE0F";
   const location = mapsQuery(plan);
-  const known = curated(plan);
+  const known = findPlace(plan);
+  const budget = budgetFor(plan);
   const where = [plan.place, plan.area].filter(Boolean).join(", ");
   const vibe = plan.catTitle || (known && known.cat.title) || "";
   const lines = [
     `Where: ${where}`,
     `Map: ${mapsUrl(plan)}`,
+    `Directions: ${directionsUrl(plan)}`,
     `When: ${prettyDay(plan.date)}, ${plan.time}`,
     vibe ? `Vibe: ${vibe}${known && known.cat.title === vibe ? `. ${known.cat.vibe}` : ""}` : "",
     "",
     known ? "What we'll do:" : "",
     ...(known ? known.place.highlights.map((h) => `- ${h}`) : []),
     "",
-    plan.note && plan.note.trim() ? `Chica's extras: ${plan.note.trim()}` : "",
+    budget ? `Budget: ${budget.sign} (${budget.range}). ${BUDGET_NOTE}` : "",
+    `Dalhin: ${checklistFor(plan).join(", ")}`,
+    CHECK_NOTE,
+    "",
+    plan.note && plan.note.trim() ? `Extras: ${plan.note.trim()}` : "",
     "",
     "Chico + Chica. See you!"
   ];

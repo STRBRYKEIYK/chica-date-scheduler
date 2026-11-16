@@ -19,6 +19,18 @@
     {
       "source": "/date/api/dates",
       "destination": "/api/dates"
+    },
+    {
+      "source": "/date/api/memory",
+      "destination": "/api/memory"
+    },
+    {
+      "source": "/date/api/photo",
+      "destination": "/api/photo"
+    },
+    {
+      "source": "/date/api/cal",
+      "destination": "/api/cal"
     }
   ]
 }

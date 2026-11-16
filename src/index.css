@@ -16,6 +16,10 @@ button, select, textarea, input { font: inherit; }
   background-attachment: local;
   line-height: 36px;
 }
+input[type="checkbox"]:checked {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12.5l4.5 4.5L19 7'/></svg>");
+  background-size: 80% 80%; background-position: center; background-repeat: no-repeat;
+}
 .notch { position: relative; }
 .notch::before, .notch::after {
   content: ""; position: absolute; top: -11px; width: 22px; height: 22px; border-radius: 9999px; background: #121111;

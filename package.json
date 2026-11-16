@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/build-places.mjs && vite",
+    "prebuild": "node scripts/build-places.mjs",
     "build": "vite build"
   },
   "dependencies": {

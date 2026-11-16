@@ -28,16 +28,23 @@ export function channels(env = process.env) {
   };
 }
 
-export default async function notify({ text, subject, calendarUrl, chicaText }) {
+// to: "keith" (default) pings Keith's channels; "chica" only sends her bot message (chicaText), used when Chico plans or changes a date.
+export default async function notify({ text, subject, calendarUrl, chicaText, title = "Chica picked our date!", to = "keith" }) {
   const env = process.env;
   const jobs = {};
   const withCal = calendarUrl ? `${text}\n\nAdd to Google Calendar:\n${calendarUrl}` : text;
+
+  if (to === "chica") {
+    if (!(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHICA_CHAT_ID && chicaText)) return { ok: false, sent: {} };
+    const ok = await post(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, { chat_id: env.TELEGRAM_CHICA_CHAT_ID, text: chicaText }).catch(() => false);
+    return { ok, sent: { telegramChica: ok } };
+  }
 
   const topic = ntfyTopic(env);
   if (topic) {
     jobs.ntfy = post(env.NTFY_SERVER || "https://ntfy.sh", {
       topic,
-      title: "Chica picked our date!",
+      title,
       message: text,
       priority: 4,
       tags: ["heart", "calendar"],

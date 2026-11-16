@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
-import { CATEGORIES, TIMES } from "./data.js";
+import { CATEGORIES, TIMES, ALL_PLACES, TIERS, ZONES, BUDGET_NOTE, CHECK_NOTE, findPlace, checklistFor, budgetFor } from "./data.js";
 import { PHOTOS } from "./photos.js";
-import { googleCalendarUrl, icsFile } from "./calendar.js";
-import { forgetPlanKey, planKey, saveDate } from "./saved.js";
+import { googleCalendarUrl, icsFile, mapsUrl, directionsUrl } from "./calendar.js";
+import { acceptDate, cancelDate, entryFrom, forgetPlanKey, getRole, isCancelled, loadDates, newPlanId, planKey, saveDate, sendAlert, slot, statusOf } from "./saved.js";
 
 const STEPS = ["Vibe", "Place", "Date & time", "Your say"];
-const EMPTY = { catId: "", catTitle: "", place: "", area: "", customPlace: false, date: "", time: "", note: "" };
+const EMPTY = { catId: "", catTitle: "", place: "", area: "", pid: "", customPlace: false, date: "", time: "", note: "" };
 const LABEL = "text-[10px] font-bold uppercase tracking-[0.28em]";
+const NO_FILTER = { budget: 0, zone: "" };
 
 /* ---------- helpers ---------- */
 const parseISO = (iso) => {
@@ -17,6 +18,18 @@ const parseISO = (iso) => {
 const toISO = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 const prettyDate = (iso) =>
   iso ? parseISO(iso).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "";
+const shortDate = (iso) => (iso ? parseISO(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "");
+const dayLabel = (iso) => {
+  const d = parseISO(iso);
+  const long = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  return d.getFullYear() === new Date().getFullYear() ? long : `${long}, ${d.getFullYear()}`;
+};
+const todayISO = () => { const t = new Date(); return toISO(t.getFullYear(), t.getMonth(), t.getDate()); };
+const daysUntil = (iso) => Math.round((parseISO(iso) - parseISO(todayISO())) / 86400000);
+const countdown = (iso) => {
+  const n = daysUntil(iso);
+  return n === 0 ? "NGAYON NA!" : n === 1 ? "BUKAS NA!" : n > 1 ? `${n} ARAW NA LANG` : "";
+};
 
 const enc = (p) =>
   btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(p))))
@@ -39,14 +52,26 @@ const dec = (s) => {
 
 const isCustomPlan = (s) => s.customPlace || s.note.trim().length > 0;
 
-const planText = (s) =>
-  [
-    "CHICOOO! HERE'S OUR DATE PLAN 🥰",
-    `Vibe: ${s.catTitle}`,
-    `Place: ${s.place}${s.area ? ` (${s.area})` : ""}${s.customPlace ? " - my own pick!" : ""}`,
-    `When: ${prettyDate(s.date)} at ${s.time}`,
-    s.note.trim() ? `My extras: ${s.note.trim()}` : ""
-  ].filter(Boolean).join("\n");
+const OPEN_LINK = () => `${location.origin}${location.pathname}?open=dates`;
+
+const planText = (s, role) =>
+  role === "chico"
+    ? [
+        "CHICAAA! PLANO KO PARA SA ATIN \u{1F970}",
+        `Vibe: ${s.catTitle}`,
+        `Place: ${s.place}${s.area ? ` (${s.area})` : ""}`,
+        `When: ${prettyDate(s.date)} at ${s.time}`,
+        s.note.trim() ? `Extras: ${s.note.trim()}` : "",
+        "",
+        `Sagutin mo dito: ${OPEN_LINK()}`
+      ].filter((l, i, a) => l !== "" || (i > 0 && a[i - 1] !== "")).join("\n")
+    : [
+        "CHICOOO! HERE'S OUR DATE PLAN \u{1F970}",
+        `Vibe: ${s.catTitle}`,
+        `Place: ${s.place}${s.area ? ` (${s.area})` : ""}${s.customPlace ? " - my own pick!" : ""}`,
+        `When: ${prettyDate(s.date)} at ${s.time}`,
+        s.note.trim() ? `My extras: ${s.note.trim()}` : ""
+      ].filter(Boolean).join("\n");
 
 /* ---------- small marks ---------- */
 const Heart = ({ className = "" }) => (
@@ -62,6 +87,12 @@ const Arrow = ({ className = "h-4 w-4", flip = false }) => (
 const Tick = ({ className = "h-4 w-4" }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M5 12.5l4.5 4.5L19 7" />
+  </svg>
+);
+const Dice = ({ className = "h-4 w-4" }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="4" y="4" width="16" height="16" rx="3" />
+    <circle cx="9" cy="9" r="1" fill="currentColor" /><circle cx="15" cy="15" r="1" fill="currentColor" /><circle cx="12" cy="12" r="1" fill="currentColor" />
   </svg>
 );
 
@@ -90,7 +121,8 @@ function Ticker() {
   );
 }
 
-function Welcome({ onStart }) {
+function Welcome({ role, onStart, mine, waiting, next, onDates }) {
+  const chico = role === "chico";
   return (
     <div className="min-h-dvh bg-ink text-paper">
       <Ticker />
@@ -118,18 +150,18 @@ function Welcome({ onStart }) {
 
         <div className="mt-auto pt-10">
           <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className={`${LABEL} text-red-lt`}>
-            Isang imbitasyon
+            {chico ? "Plano ni Chico" : "Isang imbitasyon"}
           </motion.p>
           <motion.h1
             initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.6 }}
             className="mt-4 font-display text-[3.2rem] font-black italic leading-[0.94] sm:text-7xl"
           >
-            Chico invites <span className="text-red-lt">Chica</span> on a date.
+            {chico ? <>Chico plans a date for <span className="text-red-lt">Chica.</span></> : <>Chico invites <span className="text-red-lt">Chica</span> on a date.</>}
             <Heart className="ml-2 inline-block h-[0.4em] w-[0.4em] align-[0.1em] text-red-lt" />
           </motion.h1>
 
           <motion.dl initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }} className="mt-8 border-t-[1.5px] border-paper">
-            {[["Para kay", "Chicaaaaa ko"], ["Mula kay", "Chicooo mo"], ["Ikaw ang pipili", "Lugar, araw, oras"]].map(([k, v]) => (
+            {[["Para kay", "Chicaaaaa ko"], ["Mula kay", "Chicooo mo"], [chico ? "Ikaw ang bahala" : "Ikaw ang pipili", "Lugar, araw, oras"]].map(([k, v]) => (
               <div key={k} className="grid grid-cols-[116px_1fr] gap-3 border-b border-paper/20 py-3">
                 <dt className={`${LABEL} pt-0.5 text-red-lt`}>{k}</dt>
                 <dd className="text-[15px] font-medium uppercase tracking-wide">{v}</dd>
@@ -142,8 +174,26 @@ function Welcome({ onStart }) {
             whileTap={{ scale: 0.97 }} onClick={onStart}
             className="mt-8 inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-full bg-red px-8 text-[12px] font-bold uppercase tracking-[0.2em] text-white"
           >
-            Open invitation <Arrow />
+            {chico ? "Simulan ang plano" : "Open invitation"} <Arrow />
           </motion.button>
+
+          {mine > 0 && (
+            <motion.button
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1 }}
+              whileTap={{ scale: 0.97 }} onClick={onDates}
+              className="mt-3 flex min-h-14 w-full items-center justify-between gap-3 rounded-full border-[1.5px] border-paper/60 px-6 text-left"
+            >
+              <span className="min-w-0">
+                <span className="block text-[11px] font-bold uppercase tracking-[0.2em]">
+                  {waiting ? "May plano si Chico, sagutin mo" : `Mga date natin · ${mine}`}
+                </span>
+                {next && countdown(next.date) && (
+                  <span className={`${LABEL} mt-0.5 block truncate text-red-lt`}>{shortDate(next.date)} {"·"} {countdown(next.date)}</span>
+                )}
+              </span>
+              <Arrow className="h-4 w-4 shrink-0" />
+            </motion.button>
+          )}
         </div>
       </div>
     </div>
@@ -188,11 +238,11 @@ function Title({ eyebrow, children, sub, photo, tilt = 4 }) {
 }
 
 /* a ticket-style row: dashed stub on the left, content on the right */
-function TicketRow({ mark, label, active, onClick, children, delay = 0 }) {
+function TicketRow({ mark, label, active, onClick, children, delay = 0, disabled = false }) {
   return (
     <motion.button
-      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}
-      whileTap={{ scale: 0.985 }} onClick={onClick} aria-pressed={active}
+      initial={{ opacity: 0, y: 12 }} animate={{ opacity: disabled ? 0.4 : 1, y: 0 }} transition={{ delay }}
+      whileTap={disabled ? undefined : { scale: 0.985 }} onClick={onClick} aria-pressed={active} aria-disabled={disabled || undefined}
       className={`relative grid w-full grid-cols-[68px_1fr] overflow-hidden rounded-lg border-[1.5px] bg-card text-left transition-colors ${active ? "border-red" : "border-ink"}`}
     >
       <span className={`flex flex-col items-center justify-between gap-3 border-r-2 border-dashed px-1 py-4 ${active ? "border-red" : "border-ink"}`}>
@@ -207,44 +257,115 @@ function TicketRow({ mark, label, active, onClick, children, delay = 0 }) {
   );
 }
 
-function CategoryStep({ sel, onPick }) {
+/* a small toggle for the filters */
+function Chip({ on, onClick, children }) {
+  return (
+    <button
+      onClick={onClick} aria-pressed={on}
+      className={`min-h-11 rounded-full border-[1.5px] px-4 text-[11px] font-bold uppercase tracking-[0.12em] transition-colors ${on ? "border-red bg-red text-white" : "border-ink bg-card text-ink"}`}
+    >{children}</button>
+  );
+}
+
+function Filters({ filters, setFilters, shown, total }) {
+  const active = filters.budget || filters.zone;
+  return (
+    <div className="mb-6 rounded-lg border-[1.5px] border-ink bg-card p-4">
+      <p className={`${LABEL} text-mute`}>Budget para sa dalawa</p>
+      <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Budget">
+        <Chip on={!filters.budget} onClick={() => setFilters({ ...filters, budget: 0 })}>Kahit magkano</Chip>
+        {[1, 2, 3].map((t) => (
+          <Chip key={t} on={filters.budget === t} onClick={() => setFilters({ ...filters, budget: filters.budget === t ? 0 : t })}>
+            {t === 3 ? "Kahit " : "Hanggang "}{TIERS[t].sign}
+          </Chip>
+        ))}
+      </div>
+      <p className={`${LABEL} mt-4 text-mute`}>Gaano kalayo</p>
+      <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Layo">
+        <Chip on={!filters.zone} onClick={() => setFilters({ ...filters, zone: "" })}>Kahit saan</Chip>
+        {Object.entries(ZONES).map(([k, label]) => (
+          <Chip key={k} on={filters.zone === k} onClick={() => setFilters({ ...filters, zone: filters.zone === k ? "" : k })}>{label}</Chip>
+        ))}
+      </div>
+      <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-mute" role="status">
+        {active ? `${shown} sa ${total} lugar ang bagay.` : `${total} lugar sa kabuuan.`}
+        {active ? <button onClick={() => setFilters(NO_FILTER)} className="ml-2 font-bold text-red underline underline-offset-4">Alisin</button> : null}
+      </p>
+    </div>
+  );
+}
+
+function CategoryStep({ sel, onPick, filters, setFilters, matches, onSurprise }) {
+  const total = ALL_PLACES.length;
+  const shown = ALL_PLACES.filter(matches).length;
   return (
     <>
       <Title eyebrow="Step one" sub="What kind of date are we feeling?" photo={PHOTOS.b1} tilt={4}>Pick the vibe</Title>
+      <button
+        onClick={onSurprise} disabled={!shown}
+        className="mb-4 inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-full border-[1.5px] border-dashed border-ink bg-card px-6 text-[12px] font-bold uppercase tracking-[0.2em] disabled:opacity-40"
+      >
+        <Dice className="h-5 w-5" /> Surprise me
+      </button>
+      <Filters filters={filters} setFilters={setFilters} shown={shown} total={total} />
       <div className="grid gap-4">
-        {CATEGORIES.map((c, i) => (
-          <TicketRow key={c.id} mark={i + 1} label="Vibe" active={sel.catId === c.id} onClick={() => onPick(c)} delay={0.05 * i}>
-            <span className="block pr-6 font-display text-[1.3rem] font-black leading-tight">{c.title}</span>
-            <span className="mt-1.5 block text-[12px] font-medium uppercase leading-relaxed tracking-wide text-mute">{c.vibe}</span>
-            <span className={`${LABEL} mt-3 block text-red`}>
-              {c.places.length} {c.places.length === 1 ? "place" : "places"} + your own pick
-            </span>
-          </TicketRow>
-        ))}
+        {CATEGORIES.map((c, i) => {
+          const n = c.places.filter(matches).length;
+          return (
+            <TicketRow key={c.id} mark={i + 1} label="Vibe" active={sel.catId === c.id} onClick={() => onPick(c)} delay={0.05 * i} disabled={!n}>
+              <span className="block pr-6 font-display text-[1.3rem] font-black leading-tight">{c.title}</span>
+              <span className="mt-1.5 block text-[12px] font-medium uppercase leading-relaxed tracking-wide text-mute">{c.vibe}</span>
+              <span className={`${LABEL} mt-3 block text-red`}>
+                {n === c.places.length ? `${n} ${n === 1 ? "place" : "places"}` : `${n} of ${c.places.length} places`} + your own pick
+              </span>
+            </TicketRow>
+          );
+        })}
       </div>
     </>
   );
 }
 
-function PlaceStep({ sel, patch }) {
+function PlaceStep({ sel, patch, role, filters, setFilters, matches, surprise, onSurprise }) {
   const cat = CATEGORIES.find((c) => c.id === sel.catId);
   const [custom, setCustom] = useState(sel.customPlace);
   if (!cat) return null;
 
-  const pick = (p) => { setCustom(false); patch({ place: p.name, area: p.area, customPlace: false }); };
-  const openCustom = () => { setCustom(true); patch({ place: "", area: "", customPlace: true }); };
+  const list = cat.places.filter(matches);
+  const hidden = cat.places.length - list.length;
+  const chico = role === "chico";
+  const pick = (p) => { setCustom(false); patch({ place: p.name, area: p.area, pid: p.id, customPlace: false }); };
+  const openCustom = () => { setCustom(true); patch({ place: "", area: "", pid: "", customPlace: true }); };
 
   return (
     <>
       <Title eyebrow="Step two" sub={cat.vibe} photo={PHOTOS.b2} tilt={-4}>Set the scene</Title>
       <p className="mb-4 font-display text-lg font-bold italic">{cat.title}</p>
+      {surprise && sel.pid === surprise && !custom && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-ink px-4 py-3 text-paper">
+          <p className={`${LABEL} leading-relaxed tracking-[0.2em]`}>Pinili ng tadhana</p>
+          <button onClick={onSurprise} className="inline-flex min-h-11 items-center gap-2 rounded-full border-[1.5px] border-paper/60 px-4 text-[11px] font-bold uppercase tracking-[0.16em]">
+            <Dice /> Isa pa
+          </button>
+        </div>
+      )}
+      {hidden > 0 && (
+        <p className="mb-4 text-[11px] font-medium uppercase leading-relaxed tracking-wide text-mute">
+          {hidden} lugar ang nakatago dahil sa filter.
+          <button onClick={() => setFilters(NO_FILTER)} className="ml-2 font-bold text-red underline underline-offset-4">Ipakita lahat</button>
+        </p>
+      )}
       <div className="grid gap-4" role="group" aria-label="Choose a place">
-        {cat.places.map((p, i) => (
-          <TicketRow key={p.id} mark={"ABC"[i]} label="Place" active={!custom && sel.place === p.name} onClick={() => pick(p)} delay={0.05 * i}>
+        {list.map((p, i) => (
+          <TicketRow key={p.id} mark={"ABCDEFGH"[i]} label="Place" active={!custom && sel.place === p.name} onClick={() => pick(p)} delay={0.05 * i}>
             <span className="block pr-6 font-display text-[1.3rem] font-black leading-tight">{p.name}</span>
             <span className={`${LABEL} mt-1.5 block text-mute`}>{p.area}</span>
             <span className="mt-3 block text-[12.5px] font-medium uppercase leading-relaxed tracking-wide text-ink/80">
               {p.highlights.join("  ·  ")}
+            </span>
+            <span className={`${LABEL} mt-3 flex flex-wrap gap-x-4 gap-y-1 text-red`}>
+              <span>{TIERS[p.budget].sign} {TIERS[p.budget].label}</span>
+              <span>{ZONES[p.zone]}</span>
             </span>
           </TicketRow>
         ))}
@@ -254,16 +375,16 @@ function PlaceStep({ sel, patch }) {
           className={`rounded-lg border-[1.5px] border-dashed p-5 ${custom ? "border-red bg-card" : "border-ink bg-transparent"}`}
         >
           <button onClick={openCustom} aria-expanded={custom} className="block w-full text-left">
-            <span className={`${LABEL} block text-red`}>Option D · Chica's pick</span>
+            <span className={`${LABEL} block text-red`}>Option {"ABCDEFGH"[list.length]} · {chico ? "Chico's" : "Chica's"} pick</span>
             <span className="mt-1 block font-display text-[1.3rem] font-black leading-tight">I have another place in mind!</span>
           </button>
           <AnimatePresence initial={false}>
             {custom && (
               <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                <label htmlFor="custom-place" className={`${LABEL} mb-1 mt-6 block text-mute`}>Where to, Chica?</label>
+                <label htmlFor="custom-place" className={`${LABEL} mb-1 mt-6 block text-mute`}>{chico ? "Where to?" : "Where to, Chica?"}</label>
                 <input
                   id="custom-place" autoFocus maxLength={120} value={sel.place}
-                  onChange={(e) => patch({ place: e.target.value, area: "", customPlace: true })}
+                  onChange={(e) => patch({ place: e.target.value, area: "", pid: "", customPlace: true })}
                   placeholder="A cafe, a beach, a secret spot"
                   className="w-full border-0 border-b-2 border-ink bg-transparent pb-2 pt-1 font-display text-2xl font-bold italic placeholder:font-normal placeholder:text-mute/50 focus:border-red focus:outline-none"
                 />
@@ -321,14 +442,14 @@ function Calendar({ value, onChange }) {
   );
 }
 
-function WhenStep({ sel, patch }) {
+function WhenStep({ sel, patch, role }) {
   return (
     <>
       <Title eyebrow="Step three" sub={sel.place ? `Our date at ${sel.place}.` : "Choose a day that works for you."} photo={PHOTOS.b4} tilt={4}>Lock in the time</Title>
       <div className="grid gap-5">
         <Calendar value={sel.date} onChange={(date) => patch({ date })} />
         <div>
-          <label htmlFor="time" className={`${LABEL} mb-2 block text-mute`}>What time, Chica?</label>
+          <label htmlFor="time" className={`${LABEL} mb-2 block text-mute`}>{role === "chico" ? "What time?" : "What time, Chica?"}</label>
           <div className="relative">
             <select
               id="time" value={sel.time} onChange={(e) => patch({ time: e.target.value })}
@@ -350,20 +471,20 @@ function WhenStep({ sel, patch }) {
   );
 }
 
-function NoteStep({ sel, patch }) {
+function NoteStep({ sel, patch, role }) {
   return (
     <>
       <Title eyebrow="Step four" sub="Totally optional. Your idea always counts." photo={PHOTOS.b6} tilt={-4}>Your say</Title>
       <div className="rounded-lg border-[1.5px] border-ink bg-card p-5">
         <label htmlFor="note" className="block font-display text-xl font-black italic leading-snug">
-          Anything else you want to add, change, or do on this date, Chica?
+          {role === "chico" ? "Anything else you want to add, change, or do on this date?" : "Anything else you want to add, change, or do on this date, Chica?"}
         </label>
         <textarea
-          id="note" rows={8} maxLength={800} value={sel.note} onChange={(e) => patch({ note: e.target.value })}
-          placeholder="Extra stops, foods to try, a different mood, a surprise for me"
+          id="note" rows={8} maxLength={300} value={sel.note} onChange={(e) => patch({ note: e.target.value })}
+          placeholder="Extra stops, foods to try, a different mood, a surprise"
           className="ruled mt-3 w-full resize-none border-0 bg-transparent p-0 text-lg font-medium placeholder:text-mute/50 focus:outline-none"
         />
-        <p className={`${LABEL} mt-2 text-right text-mute`}>{sel.note.length} / 800</p>
+        <p className={`${LABEL} mt-2 text-right text-mute`}>{sel.note.length} / 300</p>
       </div>
     </>
   );
@@ -404,7 +525,41 @@ function Confetti() {
   );
 }
 
-function Confirm({ sel, onRestart, onEdit }) {
+// Budget and what to bring, under the ticket.
+function BeforeYouGo({ sel }) {
+  const budget = budgetFor(sel);
+  const items = checklistFor(sel);
+  const [done, setDone] = useState({});
+  return (
+    <section className="mt-6 rounded-lg border-[1.5px] border-paper/40 p-5" aria-labelledby="bago">
+      <p id="bago" className={`${LABEL} text-red-lt`}>Bago pumunta</p>
+      {budget && (
+        <p className="mt-3 text-[15px] font-bold leading-snug">
+          Budget: <span className="text-red-lt">{budget.sign}</span> {"·"} {budget.range}
+          <span className="mt-1 block text-[11px] font-medium uppercase leading-relaxed tracking-wide text-paper/60">{BUDGET_NOTE}</span>
+        </p>
+      )}
+      <p className={`${LABEL} mt-5 text-paper/60`}>Dalhin</p>
+      <ul className="mt-2 grid gap-1">
+        {items.map((t) => (
+          <li key={t}>
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px] font-medium">
+              <input
+                type="checkbox" checked={!!done[t]} onChange={() => setDone((d) => ({ ...d, [t]: !d[t] }))}
+                className="h-5 w-5 shrink-0 appearance-none rounded border-[1.5px] border-paper/70 bg-transparent checked:border-red checked:bg-red"
+              />
+              <span className={done[t] ? "text-paper/50 line-through" : ""}>{t}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-[11px] font-medium uppercase leading-relaxed tracking-wide text-paper/60">{CHECK_NOTE}</p>
+    </section>
+  );
+}
+
+function Confirm({ role, sel, replacing, readOnly, onRestart, onEdit }) {
+  const chico = role === "chico";
   const [status, setStatus] = useState("idle");
   const [boom, setBoom] = useState(false);
   useEffect(() => {
@@ -416,21 +571,26 @@ function Confirm({ sel, onRestart, onEdit }) {
   }, [status]);
   const [copied, setCopied] = useState("");
   const planId = useMemo(() => planKey(), []);
-  // keep the chosen day on her device so the Library calendar can put a heart on it
-  useEffect(() => { saveDate(planId, sel, status === "sent"); }, [planId, sel.date, sel.time, sel.place, sel.area, sel.catTitle, status]);
+  // the same day at the same place keeps the old plan's id, so changing only the time or the extras edits that plan
+  const keepId = replacing && slot(replacing) === slot(entryFrom(planId, sel, false, role)) ? replacing.id : planId;
+  const closed = useRef("");
+  // keep the chosen day on her device and on the server so the Library calendar can put a heart on it
+  useEffect(() => {
+    if (readOnly) return;
+    saveDate(keepId, sel, status === "sent");
+    // the plan moved to another day or place: the old one is closed, once
+    if (replacing && keepId !== replacing.id && closed.current !== replacing.id) { closed.current = replacing.id; cancelDate(replacing); }
+  }, [readOnly, keepId, replacing, sel.date, sel.time, sel.place, sel.area, sel.catTitle, sel.pid, sel.note, status]);
   const custom = isCustomPlan(sel);
-  const text = planText(sel);
-  const link = `${location.origin}${location.pathname}#p=${enc(sel)}`;
+  const text = planText(sel, role);
+  const link = chico ? OPEN_LINK() : `${location.origin}${location.pathname}#p=${enc(sel)}`;
 
   const send = async () => {
     setStatus("sending");
-    try {
-      const r = await fetch(`${import.meta.env.BASE_URL}api/send`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sel) });
-      const j = r.ok ? await r.json() : null;
-      setStatus(j && j.ok === true ? "sent" : "fail");
-    } catch {
-      setStatus("fail");
-    }
+    const kind = replacing ? "change" : "new";
+    const entry = { vibe: sel.catTitle, place: sel.place, area: sel.area, date: sel.date, time: sel.time, note: sel.note, pid: sel.pid };
+    const j = await sendAlert(kind, role, entry, replacing ? { from: { place: replacing.place, area: replacing.area, date: replacing.date, time: replacing.time } } : {});
+    setStatus(j && j.ok === true ? "sent" : "fail");
   };
   const calUrl = googleCalendarUrl(sel);
   const saveIcs = () => {
@@ -446,14 +606,15 @@ function Confirm({ sel, onRestart, onEdit }) {
     try { await navigator.clipboard.writeText(value); setCopied(what); setTimeout(() => setCopied(""), 1800); }
     catch { setCopied("manual"); }
   };
+  const pill = "inline-flex min-h-12 items-center justify-center rounded-full border-[1.5px] border-paper/60 px-3 text-center text-[11px] font-bold uppercase tracking-[0.16em]";
 
   return (
     <div className="min-h-dvh bg-ink text-paper">
       {boom && <Confetti />}
       <div className="mx-auto max-w-xl px-6 pb-14 pt-6">
         <button onClick={onEdit} className={`${LABEL} -ml-1 inline-flex min-h-11 items-center gap-2 pr-3`}><Arrow flip /> Change something</button>
-        <p className={`${LABEL} mt-6 text-red-lt`}>Pasok na, asawa ko</p>
-        <h2 className="mt-2 font-display text-[2.6rem] font-black italic leading-[1.02]">Here's our plan, Chica.</h2>
+        <p className={`${LABEL} mt-6 text-red-lt`}>{chico ? "Plano ni Chico" : replacing ? "Binago na natin, asawa ko" : "Pasok na, asawa ko"}</p>
+        <h2 className="mt-2 font-display text-[2.6rem] font-black italic leading-[1.02]">{chico ? "Here's our plan." : "Here's our plan, Chica."}</h2>
 
         <motion.article
           initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: "easeOut" }}
@@ -464,7 +625,7 @@ function Confirm({ sel, onRestart, onEdit }) {
               <p className={`${LABEL} text-mute`}>Date ticket · admit two</p>
               <p className="mt-1 font-display text-[2rem] font-black italic leading-none">Chico + Chica</p>
               {custom && (
-                <span className={`${LABEL} mt-3 inline-block -rotate-2 border-2 border-red px-2.5 py-1.5 text-red`}>Chica's custom plan</span>
+                <span className={`${LABEL} mt-3 inline-block -rotate-2 border-2 border-red px-2.5 py-1.5 text-red`}>{chico ? "Chico's custom plan" : "Chica's custom plan"}</span>
               )}
             </div>
             <Heart className="mt-1 h-6 w-6 shrink-0 text-red" />
@@ -478,13 +639,13 @@ function Confirm({ sel, onRestart, onEdit }) {
           </div>
           <dl className="px-5 pb-2 pt-1">
             <Row label="Vibe">{sel.catTitle}</Row>
-            <Row label={sel.customPlace ? "Chica's pick" : "Place"}>
+            <Row label={sel.customPlace ? (chico ? "Chico's pick" : "Chica's pick") : "Place"}>
               {sel.place}
               {sel.area && <span className="mt-0.5 block text-[13px] font-medium uppercase tracking-wide text-mute">{sel.area}</span>}
             </Row>
             <Row label="Day">{prettyDate(sel.date)}</Row>
             <Row label="Time">{sel.time}</Row>
-            {sel.note.trim() && <Row label="Her extras"><span className="whitespace-pre-wrap font-medium">{sel.note.trim()}</span></Row>}
+            {sel.note.trim() && <Row label={chico ? "Extras" : "Her extras"}><span className="whitespace-pre-wrap font-medium">{sel.note.trim()}</span></Row>}
           </dl>
           <div className="notch mt-2 flex items-center justify-between gap-4 border-t-2 border-dashed border-ink/70 px-5 py-4">
             <span className="bars h-6 w-24 shrink-0" aria-hidden="true" />
@@ -492,23 +653,29 @@ function Confirm({ sel, onRestart, onEdit }) {
           </div>
         </motion.article>
 
+        <BeforeYouGo sel={sel} />
+
         <div className="mt-8 grid gap-3">
           <button
             onClick={send} disabled={status === "sending" || status === "sent"}
             className="inline-flex min-h-14 items-center justify-center gap-3 rounded-full bg-red px-6 text-[12px] font-bold uppercase tracking-[0.2em] text-white disabled:opacity-90"
           >
-            {status === "sent" ? <><Tick /> Sent to Chico</> : status === "sending" ? "Sending..." : <>Send to Chico <Arrow /></>}
+            {status === "sent" ? <><Tick /> {chico ? "Sent to Chica" : "Sent to Chico"}</> : status === "sending" ? "Sending..." : <>{chico ? "Send to Chica" : replacing ? "Send the change to Chico" : "Send to Chico"} <Arrow /></>}
           </button>
           <p role="status" className="min-h-6 text-center text-[12px] font-medium uppercase leading-relaxed tracking-wide text-paper/80">
-            {status === "sent" && "Nakarating na kay Chico ang plano mo."}
-            {status === "fail" && "Hindi pa umabot kay Chico. Gamitin ang WhatsApp o Share sa baba."}
+            {status === "sent" && (chico ? "Nakarating na kay Chica ang plano mo." : "Nakarating na kay Chico ang plano mo.")}
+            {status === "fail" && (chico ? "Hindi pa awtomatikong umabot kay Chica. Gamitin ang WhatsApp o Share sa baba." : "Hindi pa umabot kay Chico. Gamitin ang WhatsApp o Share sa baba.")}
             {copied === "manual" && "Di ma-copy dito. Pindutin nang matagal ang text para kopyahin."}
           </p>
+          <div className="grid grid-cols-2 gap-3">
+            <a href={mapsUrl(sel)} target="_blank" rel="noopener" className={pill}>Mapa</a>
+            <a href={directionsUrl(sel)} target="_blank" rel="noopener" className={pill}>Paano pumunta</a>
+          </div>
           <div className="mt-2 border-t border-paper/20 pt-5">
-            <p className={`${LABEL} text-red-lt`}>Save the date, Chica</p>
+            <p className={`${LABEL} text-red-lt`}>{chico ? "Save the date" : "Save the date, Chica"}</p>
             <div className="mt-3 grid grid-cols-2 gap-3">
-              <a href={calUrl} target="_blank" rel="noopener" className="inline-flex min-h-12 items-center justify-center rounded-full border-[1.5px] border-paper/60 px-3 text-center text-[11px] font-bold uppercase tracking-[0.16em]">Google Calendar</a>
-              <button onClick={saveIcs} className="min-h-12 rounded-full border-[1.5px] border-paper/60 px-3 text-[11px] font-bold uppercase tracking-[0.16em]">Apple / Outlook</button>
+              <a href={calUrl} target="_blank" rel="noopener" className={pill}>Google Calendar</a>
+              <button onClick={saveIcs} className={pill}>Apple / Outlook</button>
             </div>
             <p className="mt-2 text-center text-[11px] font-medium uppercase tracking-wide text-paper/60">May paalala 1 araw at 2 oras bago ang date</p>
           </div>
@@ -530,11 +697,156 @@ function Confirm({ sel, onRestart, onEdit }) {
   );
 }
 
+/* ---------- our dates: see them, change them, cancel them, answer Chico ---------- */
+function statusLine(e, role) {
+  const s = statusOf(e);
+  if (s === "proposed") return role === "chica" ? "Plano ni Chico · sagutin mo" : "Hinihintay ang sagot ni Chica";
+  if (byOf(e) === "chico") return "Oo na si Chica";
+  return e.sent ? "Naipadala na kay Chico" : "Nakatakda";
+}
+const byOf = (e) => (e && e.by === "chico" ? "chico" : "chica");
+
+// Map and calendar for a saved date, built the same way as on the ticket
+function SaveRow({ e }) {
+  const plan = { date: e.date, time: e.time, place: e.place, area: e.area, pid: e.pid, note: e.note, catTitle: e.vibe };
+  const cal = googleCalendarUrl(plan);
+  const save = () => {
+    const ics = icsFile(plan);
+    if (!ics) return;
+    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = "Chico-and-Chica-date.ics";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  };
+  const link = "inline-flex min-h-10 items-center text-[11px] font-bold uppercase tracking-[0.12em] underline decoration-red decoration-2 underline-offset-4";
+  return (
+    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0">
+      <a href={mapsUrl(plan)} target="_blank" rel="noopener" className={link}>Mapa</a>
+      {cal && <a href={cal} target="_blank" rel="noopener" className={link}>Google Calendar</a>}
+      {cal && <button onClick={save} className={link}>Apple / Outlook</button>}
+    </div>
+  );
+}
+
+function DateCard({ e, role, busy, asked, onAsk, onAccept, onChange, onCancel, past }) {
+  const waiting = statusOf(e) === "proposed" && role === "chica";
+  const cd = past ? "" : countdown(e.date);
+  const btn = "inline-flex min-h-11 items-center justify-center rounded-full border-[1.5px] px-4 text-[11px] font-bold uppercase tracking-[0.14em] disabled:opacity-40";
+  return (
+    <li className={`rounded-lg border-[1.5px] bg-card text-ink ${waiting ? "border-red" : "border-ink"}`}>
+      <div className="px-5 pt-4">
+        <div className="flex items-start justify-between gap-3">
+          <p className={`${LABEL} min-w-0 pt-1 ${waiting ? "text-red" : "text-mute"}`}>{past ? "Nakaraan" : statusLine(e, role)}</p>
+          {cd && <span className={`${LABEL} shrink-0 rounded-full bg-ink px-3 py-1.5 text-center leading-tight tracking-[0.16em] text-paper`}>{cd}</span>}
+        </div>
+        <p className="mt-2 font-display text-[1.5rem] font-black leading-tight">{dayLabel(e.date)}</p>
+        <p className="mt-0.5 text-[15px] font-bold">{e.time}</p>
+      </div>
+      <div className="px-5 pb-4 pt-3">
+        <p className="break-words text-[17px] font-bold leading-snug">{e.place}</p>
+        {e.area && <p className={`${LABEL} mt-0.5 text-mute`}>{e.area}</p>}
+        {e.note && <p className="mt-2 whitespace-pre-wrap text-[13px] font-medium text-ink/80">{e.note}</p>}
+        {!past && <SaveRow e={e} />}
+        {!past && (
+          <div className="mt-4">
+            {asked ? (
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Sigurado ka ba?">
+                <span className={`${LABEL} mr-1`}>Sigurado ka ba?</span>
+                <button disabled={busy} onClick={onCancel} className={`${btn} border-red bg-red text-white`}>{waiting ? "Oo, hindi pwede" : "Oo, i-cancel"}</button>
+                <button onClick={() => onAsk("")} className={`${btn} border-ink`}>Huwag</button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {waiting && <button disabled={busy} onClick={onAccept} className={`${btn} border-red bg-red text-white`}>Game na!</button>}
+                <button disabled={busy} onClick={onChange} className={`${btn} border-ink`}>Palitan</button>
+                <button disabled={busy} onClick={() => onAsk(e.id)} className={`${btn} border-ink`}>{waiting ? "Hindi pwede" : "I-cancel"}</button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function MyDates({ role, onBack, onNew, onEdit }) {
+  const [state, setState] = useState({ loading: true, all: [] });
+  const [busy, setBusy] = useState("");
+  const [asked, setAsked] = useState("");
+  const [msg, setMsg] = useState("");
+  const refresh = useCallback(async () => { const r = await loadDates(); setState({ loading: false, all: r.all }); }, []);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const today = todayISO();
+  const live = state.all.filter((x) => !isCancelled(x));
+  const upcoming = live.filter((x) => x.date >= today).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const past = live.filter((x) => x.date < today).sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 5);
+
+  const run = async (e, job, done) => {
+    setBusy(e.id); setAsked("");
+    try { await job(); setMsg(done); } finally { await refresh(); setBusy(""); }
+  };
+  const accept = (e) => run(e, async () => { const ok = acceptDate(e); await sendAlert("accept", "chica", ok); }, "Sige, kita tayo! Nakatakda na.");
+  const cancel = (e) => run(e, async () => {
+    const proposal = statusOf(e) === "proposed" && role === "chica";
+    cancelDate(e);
+    await sendAlert(proposal ? "decline" : "cancel", role, e);
+  }, "Na-cancel na. Pumili tayo ng bago, kailan mo gusto?");
+
+  return (
+    <div className="min-h-dvh bg-paper text-ink">
+      <div className="mx-auto w-full max-w-xl px-6 pb-16 pt-4">
+        <header className="mb-8 flex items-center justify-between">
+          <button onClick={onBack} className={`${LABEL} -ml-1 inline-flex min-h-11 items-center gap-2 pr-3`}><Arrow flip /> Back</button>
+          <p className={`${LABEL} text-mute`}>{role === "chico" ? "Plano ni Chico" : "Para kay Chica"}</p>
+        </header>
+        <Title eyebrow="Mga date natin" sub={upcoming.length ? "Palitan o i-cancel kung kailangan." : ""}>Our dates</Title>
+
+        <p role="status" className="min-h-5 text-[12px] font-bold uppercase leading-relaxed tracking-wide text-red">{msg}</p>
+
+        {state.loading && <p className={`${LABEL} mt-4 text-mute`}>Sandali lang...</p>}
+        {!state.loading && !upcoming.length && (
+          <p className="mt-4 text-[15px] font-medium leading-relaxed text-mute">Wala pang nakatakdang date. Pumili na tayo ng araw.</p>
+        )}
+        <ul className="mt-4 grid gap-4">
+          {upcoming.map((e) => (
+            <DateCard
+              key={e.id} e={e} role={role} busy={busy === e.id} asked={asked === e.id} onAsk={setAsked}
+              onAccept={() => accept(e)} onChange={() => onEdit(e)} onCancel={() => cancel(e)}
+            />
+          ))}
+        </ul>
+
+        <button
+          onClick={onNew}
+          className="mt-6 inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-full bg-red px-6 text-[12px] font-bold uppercase tracking-[0.2em] text-white"
+        >Mag-plan ng bago <Arrow /></button>
+
+        {past.length > 0 && (
+          <>
+            <p className={`${LABEL} mt-10 text-mute`}>Mga nakaraan</p>
+            <ul className="mt-3 grid gap-3">
+              {past.map((e) => <DateCard key={e.id} e={e} role={role} past />)}
+            </ul>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ---------- app ---------- */
 export default function App() {
+  const role = useMemo(() => getRole(), []);
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState(1);
   const [sel, setSel] = useState(EMPTY);
+  const [replacing, setReplacing] = useState(null);
+  const [fromLink, setFromLink] = useState(false);
+  const [filters, setFilters] = useState(NO_FILTER);
+  const [surprise, setSurprise] = useState("");
+  const [dates, setDates] = useState([]);
   const patch = (o) => setSel((s) => ({ ...s, ...o }));
   const go = (n) => { setDir(n > step ? 1 : -1); setStep(n); window.scrollTo(0, 0); };
 
@@ -542,9 +854,22 @@ export default function App() {
     const m = /^#p=(.+)$/.exec(location.hash);
     if (m) {
       const p = dec(m[1]);
-      if (p) { setSel(p); setStep(5); }
+      if (p) { setSel(p); setFromLink(true); setStep(5); return; }
     }
+    if (new URLSearchParams(location.search).get("open") === "dates") setStep(6);
   }, []);
+
+  // what is already planned, for the welcome screen
+  useEffect(() => {
+    let live = true;
+    loadDates().then((r) => { if (live) setDates(r.all.filter((x) => !isCancelled(x) && x.date >= todayISO()).sort((a, b) => (a.date < b.date ? -1 : 1))); });
+    return () => { live = false; };
+  }, [step]);
+
+  const matches = useCallback(
+    (p) => (!filters.budget || p.budget <= filters.budget) && (!filters.zone || p.zone === filters.zone),
+    [filters]
+  );
 
   const canNext =
     (step === 2 && sel.place.trim().length >= 2) ||
@@ -556,22 +881,51 @@ export default function App() {
     step === 3 && !canNext ? (!sel.date ? "Pick a day to continue" : "Pick a time to continue") : "";
 
   const pickCategory = (c) => {
-    if (sel.catId !== c.id) patch({ catId: c.id, catTitle: c.title, place: "", area: "", customPlace: false });
+    if (sel.catId !== c.id) patch({ catId: c.id, catTitle: c.title, place: "", area: "", pid: "", customPlace: false });
+    setSurprise("");
     go(2);
   };
 
+  const surpriseMe = () => {
+    const pool = ALL_PLACES.filter(matches).filter((p) => p.id !== surprise);
+    const list = pool.length ? pool : ALL_PLACES.filter(matches);
+    if (!list.length) return;
+    const p = list[Math.floor(Math.random() * list.length)];
+    setSurprise(p.id);
+    setSel((s) => ({ ...s, catId: p.catId, catTitle: p.catTitle, place: p.name, area: p.area, pid: p.id, customPlace: false }));
+    if (step !== 2) go(2);
+  };
+
+  const fresh = () => { forgetPlanKey(); history.replaceState(null, "", location.pathname); setSel(EMPTY); setReplacing(null); setFromLink(false); setSurprise(""); };
+
+  // change a saved date: start from what it was, at the day and time
+  const startEdit = (e) => {
+    const f = findPlace(e);
+    const cat = f ? f.cat : CATEGORIES.find((c) => c.title === e.vibe);
+    forgetPlanKey();
+    setSel({
+      catId: cat ? cat.id : "", catTitle: cat ? cat.title : e.vibe || "", place: e.place, area: e.area || "", pid: f ? f.place.id : "",
+      customPlace: !f, date: e.date, time: e.time, note: e.note || ""
+    });
+    setReplacing(e); setFromLink(false); setSurprise("");
+    go(cat ? 3 : 1);
+  };
+
+  const waiting = role === "chica" && dates.some((x) => statusOf(x) === "proposed" && byOf(x) === "chico");
+
   let body;
-  if (step === 0) body = <Welcome onStart={() => go(1)} />;
-  else if (step === 5) body = <Confirm sel={sel} onEdit={() => go(4)} onRestart={() => { forgetPlanKey(); history.replaceState(null, "", location.pathname); setSel(EMPTY); go(1); }} />;
+  if (step === 0) body = <Welcome role={role} onStart={() => { fresh(); go(1); }} mine={dates.length} waiting={waiting} next={dates[0]} onDates={() => go(6)} />;
+  else if (step === 6) body = <MyDates role={role} onBack={() => go(0)} onNew={() => { fresh(); go(1); }} onEdit={startEdit} />;
+  else if (step === 5) body = <Confirm role={role} sel={sel} replacing={replacing} readOnly={fromLink} onEdit={() => { setFromLink(false); go(4); }} onRestart={() => { fresh(); go(1); }} />;
   else {
     body = (
       <div className="min-h-dvh bg-paper text-ink">
         <div className="mx-auto w-full max-w-xl px-6 pb-44 pt-4">
           <Header step={step} onBack={() => go(step - 1)} />
-          {step === 1 && <CategoryStep sel={sel} onPick={pickCategory} />}
-          {step === 2 && <PlaceStep sel={sel} patch={patch} />}
-          {step === 3 && <WhenStep sel={sel} patch={patch} />}
-          {step === 4 && <NoteStep sel={sel} patch={patch} />}
+          {step === 1 && <CategoryStep sel={sel} onPick={pickCategory} filters={filters} setFilters={setFilters} matches={matches} onSurprise={surpriseMe} />}
+          {step === 2 && <PlaceStep sel={sel} patch={patch} role={role} filters={filters} setFilters={setFilters} matches={matches} surprise={surprise} onSurprise={surpriseMe} />}
+          {step === 3 && <WhenStep sel={sel} patch={patch} role={role} />}
+          {step === 4 && <NoteStep sel={sel} patch={patch} role={role} />}
         </div>
         {step >= 2 && (
           <div className="fixed inset-x-0 bottom-0 border-t border-line bg-paper px-6 pb-6 pt-3">

@@ -1,4 +1,5 @@
-// GET lists the dates Chica has set; POST remembers one. The Library calendar reads this to draw its hearts.
+// GET lists the dates (cancelled ones too, so every device learns about a cancel); POST remembers or changes one.
+// The Library calendar and Date Tayo read this. Memories have their own endpoint (memory.js).
 import { enabled, sanitize, upsert, dedupe, blobIO, blobVarNames } from "./_dates.js";
 
 export default async function handler(req, res, io = blobIO) {
