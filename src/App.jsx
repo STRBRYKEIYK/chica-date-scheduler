@@ -343,7 +343,7 @@ function Confirm({ sel, onRestart, onEdit }) {
   const send = async () => {
     setStatus("sending");
     try {
-      const r = await fetch("/api/date", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sel) });
+      const r = await fetch(`${import.meta.env.BASE_URL}api/send`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sel) });
       const j = r.ok ? await r.json() : null;
       setStatus(j && j.ok === true ? "sent" : "fail");
     } catch {

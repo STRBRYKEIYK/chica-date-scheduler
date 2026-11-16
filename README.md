@@ -11,12 +11,20 @@ npm install
 npm run dev
 ```
 
-The alert only works when deployed on Vercel.
+Open http://localhost:5173/date/ (the app uses the /date/ base). The alert only works when deployed on Vercel.
 
 ## Deploy
 
-Import the repo in Vercel (it detects Vite) and add the domain `chica.keicodes.dev`.
-Add the environment variables from `.env.example` to this project.
+The app is served at `https://chica.keicodes.dev/date/`.
+
+`chica.keicodes.dev` belongs to the kwento-natin project, so this one lives in its own Vercel project and kwento-natin forwards `/date/*` to it (see `vercel.json` in that repo).
+
+1. Import this repo in Vercel (personal account). It detects Vite.
+2. Project Settings > Deployment Protection: set Vercel Authentication to Disabled, otherwise kwento-natin cannot forward to it.
+3. Add the environment variables from `.env.example` to this project.
+4. If the project's `.vercel.app` hostname is not `chica-date-scheduler.vercel.app`, change it in kwento-natin's `vercel.json`.
+
+The build output goes to `dist/date` and everything uses the `/date/` base. The form posts to `/date/api/send`, which `vercel.json` rewrites to `api/date.js`.
 
 ## Alerts
 
