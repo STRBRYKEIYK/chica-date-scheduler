@@ -1,12 +1,11 @@
 // GET lists the dates Chica has set; POST remembers one. The Library calendar reads this to draw its hearts.
-import { enabled, sanitize, upsert, blobIO, blobVarNames, probe } from "./_dates.js";
+import { enabled, sanitize, upsert, blobIO, blobVarNames } from "./_dates.js";
 
 export default async function handler(req, res, io = blobIO) {
   res.setHeader("cache-control", "no-store");
   if (req.method !== "GET" && req.method !== "POST") { res.status(405).json({ ok: false }); return; }
   if (!enabled()) { res.status(200).json({ ok: req.method === "GET", enabled: false, dates: [], blobVars: blobVarNames() }); return; }
   try {
-    if (req.method === "GET" && req.query && req.query.probe === "1") { res.status(200).json({ probe: (await probe()) ? "ok" : "missing" }); return; } // TEMP
     if (req.method === "GET") {
       res.status(200).json({ ok: true, enabled: true, dates: await io.read() });
       return;
