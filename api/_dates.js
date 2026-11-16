@@ -11,7 +11,16 @@ const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 const clean = (v, max) =>
   typeof v === "string" ? v.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, max) : "";
 
-export const enabled = (env = process.env) => Boolean(env.BLOB_READ_WRITE_TOKEN);
+// Vercel names the store's variables BLOB_READ_WRITE_TOKEN (or BLOB_STORE_ID with OIDC), sometimes with a prefix.
+export function creds(env = process.env) {
+  const token = Object.keys(env).find((k) => k.endsWith("BLOB_READ_WRITE_TOKEN") && env[k]);
+  if (token) return { token: env[token] };
+  const id = Object.keys(env).find((k) => k.endsWith("BLOB_STORE_ID") && env[k]);
+  if (id) return { storeId: env[id] };
+  return null;
+}
+export const enabled = (env = process.env) => creds(env) !== null;
+export const blobVarNames = (env = process.env) => Object.keys(env).filter((k) => /BLOB/i.test(k)); // names only, never values
 const access = (env = process.env) => (env.BLOB_ACCESS === "public" ? "public" : "private");
 
 // Turns whatever the browser sent into one safe entry, or null when it is not a real date plan.
@@ -38,12 +47,12 @@ export function upsert(list, entry, max = MAX) {
 
 export const blobIO = {
   async read() {
-    const r = await get(PATH, { access: access(), useCache: false });
+    const r = await get(PATH, { access: access(), useCache: false, ...creds() });
     if (!r || r.statusCode !== 200) return [];
     const a = JSON.parse(await new Response(r.stream).text());
     return Array.isArray(a) ? a : [];
   },
   async write(list) {
-    await put(PATH, JSON.stringify(list), { access: access(), contentType: "application/json", addRandomSuffix: false, allowOverwrite: true });
+    await put(PATH, JSON.stringify(list), { access: access(), contentType: "application/json", addRandomSuffix: false, allowOverwrite: true, ...creds() });
   }
 };
