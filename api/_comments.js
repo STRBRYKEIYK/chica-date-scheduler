@@ -4,7 +4,8 @@ import { creds } from "./_dates.js";
 import { COMMENT_ACCESS } from "./_comment-access.js";
 
 export const AUTHORS = Object.freeze({ chico: "Chico", chicaaa: "Chicaaa" });
-export const PAGES = new Set(["library", "oras", "555", "date", "vouchers", "second", "third", "ilychicaaa", ...["1010", "1111", "1212", "111", "222", "333", "444", "555"].map(slot => `oras-${slot}`)]);
+// system-check is an isolated smoke-test thread; no public page renders its records.
+export const PAGES = new Set(["library", "oras", "555", "date", "vouchers", "second", "third", "ilychicaaa", "system-check", ...["1010", "1111", "1212", "111", "222", "333", "444", "555"].map(slot => `oras-${slot}`)]);
 export const ID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 export const LIMIT = 1200;
 const ROOT = "library-comments/v1/";
