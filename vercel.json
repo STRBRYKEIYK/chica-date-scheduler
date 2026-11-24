@@ -13,10 +13,6 @@
   ],
   "rewrites": [
     {
-      "source": "/date/api/comments",
-      "destination": "/api/comments"
-    },
-    {
       "source": "/date/api/send",
       "destination": "/api/date"
     },
