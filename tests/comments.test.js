@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import handler from "../api/comments.js";
-import { identify, sanitize, safeComment } from "../api/_comments.js";
+import { identify, sanitize, safeComment, createCommentStore } from "../api/_comments.js";
 
 const keys = { chico: "a".repeat(43), chicaaa: "b".repeat(43) };
 const access = Object.fromEntries(Object.entries(keys).map(([role, key]) => [role, createHash("sha256").update(key).digest("hex")]));
@@ -71,4 +71,21 @@ test("all page and time threads are validated; malformed records stay out", () =
   assert(sanitize({ id: randomUUID(), page: "oras-1212", text: "Good\u0000\r\nnight" }));
   assert.equal(sanitize({ id: randomUUID(), page: "oras-999", text: "x" }), null);
   assert.equal(safeComment({ id: randomUUID(), page: "date", author: "toString", text: "x", createdAt: 1 }, "date"), null);
+  assert.equal(sanitize({ id: [randomUUID()], page: "date", text: "x" }), null);
+  assert.equal(safeComment({ id: [randomUUID()], page: "date", author: "chico", text: "x", createdAt: 1 }, "date"), null);
+  assert.equal(safeComment({ id: randomUUID(), page: "date", author: "chico", text: "x", createdAt: 1e30 }, "date"), null);
+});
+test("a malformed stored object cannot be overwritten", async () => {
+  const store = memory(); store.read = async () => ({ invalid: true });
+  const result = await call({ method: "POST", store, body: { id: randomUUID(), page: "ilychicaaa", text: "Keep draft" } });
+  assert.equal(result.code, 409); assert.equal(store.entries.size, 0);
+});
+test("private object reads handle missing and corrupt objects without hiding transport errors", async () => {
+  const sdk = { get: async (_key, options) => { assert.equal(options.access, "private"); assert.equal(options.useCache, false); return null; } };
+  const store = createCommentStore(sdk);
+  assert.equal(await store.read("library-comments/v1/date/missing.json"), null);
+  sdk.get = async () => ({ statusCode: 200, stream: new Response("broken JSON").body });
+  assert.deepEqual(await store.read("library-comments/v1/date/corrupt.json"), { invalid: true });
+  sdk.get = async () => { throw new Error("Offline"); };
+  await assert.rejects(store.read("library-comments/v1/date/network.json"), /Offline/);
 });

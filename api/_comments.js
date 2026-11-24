@@ -10,6 +10,7 @@ export const LIMIT = 1200;
 const ROOT = "library-comments/v1/";
 
 export function identify(header, access = COMMENT_ACCESS) {
+  if (typeof header !== "string") return null;
   const token = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(header || "")?.[1];
   if (!token) return null;
   const digest = createHash("sha256").update(token).digest();
@@ -20,7 +21,7 @@ export function identify(header, access = COMMENT_ACCESS) {
 }
 
 export function sanitize(body) {
-  if (!body || typeof body !== "object" || Array.isArray(body) || !PAGES.has(body.page) || !ID.test(body.id || "") || typeof body.text !== "string") return null;
+  if (!body || typeof body !== "object" || Array.isArray(body) || !PAGES.has(body.page) || typeof body.id !== "string" || !ID.test(body.id) || typeof body.text !== "string") return null;
   const text = body.text.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim();
   if (!text || text.length > LIMIT) return null;
   return { id: body.id, page: body.page, text };
@@ -31,25 +32,31 @@ export function pathname(page, author, id) {
 }
 
 export function safeComment(value, page) {
-  if (!value || value.page !== page || !Object.hasOwn(AUTHORS, value.author) || !ID.test(value.id || "") || typeof value.text !== "string" || !value.text.trim() || value.text.length > LIMIT || !Number.isFinite(value.createdAt)) return null;
+  if (!value || value.page !== page || typeof value.author !== "string" || !Object.hasOwn(AUTHORS, value.author) || typeof value.id !== "string" || !ID.test(value.id) || typeof value.text !== "string" || !value.text.trim() || value.text.length > LIMIT || !Number.isFinite(value.createdAt) || !Number.isFinite(new Date(value.createdAt).getTime())) return null;
   return { id: value.id, page, author: value.author, name: AUTHORS[value.author], text: value.text, createdAt: value.createdAt };
 }
 
 // Every comment has its own immutable object. Concurrent submissions cannot overwrite each other.
-export const commentStore = {
+export const createCommentStore = (sdk = { get, list, put }) => ({
   async read(key) {
-    const response = await get(key, { access: "private", useCache: false, ...creds() });
+    const response = await sdk.get(key, { access: "private", useCache: false, ...creds() });
     if (!response || response.statusCode !== 200) return null;
-    return JSON.parse(await new Response(response.stream).text());
+    const text = await new Response(response.stream).text();
+    try { return JSON.parse(text); }
+    catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+      console.error("invalid comment JSON:", key);
+      return { invalid: true };
+    }
   },
   async append(key, entry) {
-    await put(key, JSON.stringify(entry), { access: "private", contentType: "application/json", addRandomSuffix: false, allowOverwrite: false, ...creds() });
+    await sdk.put(key, JSON.stringify(entry), { access: "private", contentType: "application/json", addRandomSuffix: false, allowOverwrite: false, ...creds() });
   },
   async page(page, before) {
     let cursor;
     const blobs = [];
     do {
-      const result = await list({ prefix: `${ROOT}${page}/`, limit: 1000, ...(cursor ? { cursor } : {}), ...creds() });
+      const result = await sdk.list({ prefix: `${ROOT}${page}/`, limit: 1000, ...(cursor ? { cursor } : {}), ...creds() });
       blobs.push(...result.blobs);
       cursor = result.hasMore ? result.cursor : undefined;
     } while (cursor);
@@ -63,4 +70,5 @@ export const commentStore = {
       next: blobs.length > start + selected.length ? selected.at(-1)?.pathname || null : null
     };
   }
-};
+});
+export const commentStore = createCommentStore();

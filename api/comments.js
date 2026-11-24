@@ -33,11 +33,16 @@ export default async function handler(req, res, options = {}) {
       return res.status(200).json({ ok: true, viewer: { author, name: AUTHORS[author] }, ...result });
     }
     if (!/^application\/json(?:;|$)/i.test(req.headers?.["content-type"] || "")) return res.status(415).json({ ok: false, error: "json" });
-    if (Buffer.byteLength(JSON.stringify(req.body || {})) > 10000) return res.status(413).json({ ok: false, error: "size" });
-    const input = sanitize(req.body);
+    let body;
+    try { body = req.body; } catch { return res.status(400).json({ ok: false, error: "json" }); }
+    if (Buffer.byteLength(JSON.stringify(body || {})) > 10000) return res.status(413).json({ ok: false, error: "size" });
+    const input = sanitize(body);
     if (!input) return res.status(400).json({ ok: false, error: "comment" });
+    if (req.query?.page !== undefined && req.query.page !== input.page) return res.status(400).json({ ok: false, error: "page" });
     const key = pathname(input.page, author, input.id);
-    const existing = safeComment(await store.read(key), input.page);
+    const raw = await store.read(key);
+    const existing = safeComment(raw, input.page);
+    if (raw !== null && raw !== undefined && !existing) return res.status(409).json({ ok: false, error: "immutable" });
     if (existing) {
       if (existing.text !== input.text) return res.status(409).json({ ok: false, error: "immutable" });
       return res.status(200).json({ ok: true, comment: existing });
